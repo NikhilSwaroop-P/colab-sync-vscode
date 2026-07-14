@@ -222,9 +222,65 @@ function getWebviewContent(status) {
           padding: 24px;
           height: 100vh;
           box-sizing: border-box;
-          background-image: linear-gradient(180deg, #000000 60%, #051329 100%);
-          background-attachment: fixed;
+          overflow: hidden;
+          position: relative;
         }
+        
+        .glow-bg {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 1;
+          pointer-events: none;
+          overflow: hidden;
+          background: #000000;
+        }
+
+        .blob {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(100px);
+          opacity: 0.12;
+          mix-blend-mode: screen;
+        }
+
+        .blob-blue {
+          width: 350px;
+          height: 350px;
+          background: #4285f4;
+          bottom: -50px;
+          left: 20%;
+          animation: floatBlue 25s ease-in-out infinite alternate;
+        }
+
+        .blob-purple {
+          width: 300px;
+          height: 300px;
+          background: #a855f7;
+          bottom: -80px;
+          right: 25%;
+          animation: floatPurple 20s ease-in-out infinite alternate;
+        }
+
+        @keyframes floatBlue {
+          0% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(50px, -30px) scale(1.1); }
+          100% { transform: translate(-30px, 15px) scale(0.9); }
+        }
+
+        @keyframes floatPurple {
+          0% { transform: translate(0, 0) scale(1); }
+          50% { transform: translate(-40px, -50px) scale(0.9); }
+          100% { transform: translate(30px, 20px) scale(1.15); }
+        }
+
+        .content {
+          position: relative;
+          z-index: 2;
+        }
+
         .header {
           display: flex;
           align-items: center;
@@ -254,6 +310,7 @@ function getWebviewContent(status) {
           border-radius: 16px;
           padding: 20px;
           margin-bottom: 20px;
+          backdrop-filter: blur(10px);
         }
         table {
           width: 100%;
@@ -335,73 +392,80 @@ function getWebviewContent(status) {
       </style>
     </head>
     <body>
-      <div class="header">
-        <h1 class="title">colabd connection</h1>
-        <span class="badge">${isRunning ? "active" : "offline"}</span>
+      <div class="glow-bg">
+        <div class="blob blob-blue"></div>
+        <div class="blob blob-purple"></div>
       </div>
 
-      <div class="panel">
-        <table>
-          <tbody>
-            <tr>
-              <td class="label">daemon endpoint</td>
-              <td class="value">localhost:${daemonPort}</td>
-            </tr>
-            <tr>
-              <td class="label">workspace status</td>
-              <td class="value">${activeLink} (${activeLinkPath})</td>
-            </tr>
-            <tr>
-              <td class="label">active session</td>
-              <td class="value">${endpoint}</td>
-            </tr>
-            <tr>
-              <td class="label">consumption rate</td>
-              <td class="value">${rateText}</td>
-            </tr>
-            <tr>
-              <td class="label">quota remaining</td>
-              <td class="value">${usageLeftText}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <div class="content">
+        <div class="header">
+          <h1 class="title">colabd connection</h1>
+          <span class="badge">${isRunning ? "active" : "offline"}</span>
+        </div>
 
-      <div class="section-title">server control</div>
-      <div class="button-group" style="margin-bottom: 20px;">
-        ${isRunning ? 
-          `<button class="btn btn-danger" onclick="sendCommand('stopDaemon')">Stop Server</button>` : 
-          `<button class="btn btn-primary" onclick="sendCommand('startDaemon')">Start Server</button>`
-        }
-        <button class="btn" onclick="sendCommand('linkWorkspace')" ${!isRunning ? "disabled" : ""}>Link Folder...</button>
-      </div>
+        <div class="panel">
+          <table>
+            <tbody>
+              <tr>
+                <td class="label">daemon endpoint</td>
+                <td class="value">localhost:${daemonPort}</td>
+              </tr>
+              <tr>
+                <td class="label">workspace status</td>
+                <td class="value">${activeLink} (${activeLinkPath})</td>
+              </tr>
+              <tr>
+                <td class="label">active session</td>
+                <td class="value">${endpoint}</td>
+              </tr>
+              <tr>
+                <td class="label">consumption rate</td>
+                <td class="value">${rateText}</td>
+              </tr>
+              <tr>
+                <td class="label">quota remaining</td>
+                <td class="value">${usageLeftText}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-      ${isRunning ? `
-        <div class="section-title">session allocation</div>
+        <div class="section-title">server control</div>
         <div class="button-group" style="margin-bottom: 20px;">
-          ${isConnected ? 
-            `<button class="btn btn-danger" onclick="sendCommand('teardownSession')">Terminate Session</button>` :
-            `
-              <select id="hardwareSelect">
-                <option value="Standard CPU">Standard CPU (Free/Paid Standard)</option>
-                <option value="T4 GPU">T4 GPU (Free/Paid Standard)</option>
-                <option value="L4 GPU">L4 GPU (Paid Premium)</option>
-                <option value="A100 GPU">A100 GPU (Paid Premium)</option>
-                <option value="TPU">TPU (Paid Premium)</option>
-              </select>
-              <button class="btn btn-primary" onclick="provision()">Claim Session</button>
-            `
+          ${isRunning ? 
+            `<button class="btn btn-danger" onclick="sendCommand('stopDaemon')">Stop Server</button>` : 
+            `<button class="btn btn-primary" onclick="sendCommand('startDaemon')">Start Server</button>`
           }
+          <button class="btn" onclick="sendCommand('linkWorkspace')" ${!isRunning ? "disabled" : ""}>Link Folder...</button>
         </div>
-      ` : ""}
 
-      ${isConnected ? `
-        <div class="section-title">development tools</div>
-        <div class="button-group">
-          <button class="btn btn-primary" onclick="sendCommand('forceSync')">Sync Now</button>
-          <button class="btn" onclick="sendCommand('openTerminal')">Open Terminal</button>
-        </div>
-      ` : ""}
+        ${isRunning ? `
+          <div class="section-title">session allocation</div>
+          <div class="button-group" style="margin-bottom: 20px;">
+            ${isConnected ? 
+              `<button class="btn btn-danger" onclick="sendCommand('teardownSession')">Terminate Session</button>` :
+              `
+                <select id="hardwareSelect">
+                  <option value="Standard CPU">Standard CPU (Free/Paid Standard)</option>
+                  <option value="T4 GPU">T4 GPU (Free/Paid Standard)</option>
+                  <option value="L4 GPU">L4 GPU (Paid Premium)</option>
+                  <option value="A100 GPU">A100 GPU (Paid Premium)</option>
+                  <option value="TPU">TPU (Paid Premium)</option>
+                </select>
+                <button class="btn btn-primary" onclick="provision()">Claim Session</button>
+              `
+            }
+          </div>
+        ` : ""}
+
+        ${isConnected ? `
+          <div class="section-title">development tools</div>
+          <div class="button-group">
+            <button class="btn btn-primary" onclick="sendCommand('forceSync')">Sync Now</button>
+            <button class="btn" onclick="sendCommand('openTerminal')">Open Terminal</button>
+          </div>
+        ` : ""}
+      </div>
 
       <script>
         const vscode = acquireVsCodeApi();
@@ -656,7 +720,7 @@ function activate(context) {
         if (err) {
           vscode.window.showErrorMessage(`Linking failed: ${err.message}`);
         } else {
-          vscode.window.showInformationMessage(`Workspace successfully linked as '${linkName}'`);
+          vscode.window.showInformationMessage("Workspace successfully linked.");
         }
         provider.refresh();
         updateWebview();
