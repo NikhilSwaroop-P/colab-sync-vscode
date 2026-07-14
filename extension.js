@@ -36,7 +36,7 @@ class ColabSyncProvider {
 
     try {
       status = await new Promise((resolve, reject) => {
-        const req = http.get(`${daemonUrl}/v1/status`, { timeout: 1000 }, (res) => {
+        const req = http.get(`${daemonUrl}/v1/status`, { timeout: 3000 }, (res) => {
           let body = "";
           res.on("data", (chunk) => body += chunk);
           res.on("end", () => {
@@ -685,6 +685,7 @@ function getWebviewBaseContent() {
 
       <script>
         const vscode = acquireVsCodeApi();
+        let lastStatus = null;
         
         function triggerCommand(btn, cmd) {
           btn.classList.add("loading");
@@ -734,6 +735,14 @@ function getWebviewBaseContent() {
         }
 
         function updateUI(status) {
+          if (status === null && lastStatus !== null) {
+            // Keep last status visual, just fade badge slightly to show reconnecting
+            document.getElementById("headerBadge").style.opacity = "0.5";
+            return;
+          }
+          document.getElementById("headerBadge").style.opacity = "1";
+          lastStatus = status;
+
           const isRunning = !!status;
           const isConnected = status && status.connected;
           
@@ -846,7 +855,7 @@ function activate(context) {
 
   async function getDaemonStatus() {
     return new Promise((resolve) => {
-      const req = http.get(`${daemonUrl}/v1/status`, { timeout: 800 }, (res) => {
+      const req = http.get(`${daemonUrl}/v1/status`, { timeout: 3000 }, (res) => {
         let body = "";
         res.on("data", (chunk) => body += chunk);
         res.on("end", () => {
