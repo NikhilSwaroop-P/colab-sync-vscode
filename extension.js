@@ -696,7 +696,12 @@ function getWebviewBaseContent() {
         const vscode = acquireVsCodeApi();
         let lastStatus = null;
         
+        // Disable loading spinners on terminal spawn clicks since they return instantly
         function triggerCommand(btn, cmd) {
+          if (cmd === 'openTerminal' || cmd === 'openExternalTerminal') {
+            vscode.postMessage({ command: cmd });
+            return;
+          }
           btn.classList.add("loading");
           vscode.postMessage({ command: cmd });
           setTimeout(() => {
@@ -1284,18 +1289,25 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand("colab-sync.openExternalTerminal", () => {
       const scriptPath = "/home/crimson/Projects/notebook/colab-sync/colab-term.js";
-      const proc = spawn("gnome-terminal", ["--", "node", scriptPath], {
+      const procKitty = spawn("kitty", ["node", scriptPath], {
         detached: true,
         stdio: "ignore"
       });
-      proc.on("error", () => {
-        const fallback = spawn("xterm", ["-e", "node", scriptPath], {
+      procKitty.on("error", () => {
+        const procGnome = spawn("gnome-terminal", ["--", "node", scriptPath], {
           detached: true,
           stdio: "ignore"
         });
-        fallback.unref();
+        procGnome.on("error", () => {
+          const procXterm = spawn("xterm", ["-e", "node", scriptPath], {
+            detached: true,
+            stdio: "ignore"
+          });
+          procXterm.unref();
+        });
+        procGnome.unref();
       });
-      proc.unref();
+      procKitty.unref();
     })
   );
 
