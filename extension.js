@@ -183,7 +183,7 @@ class ColabSyncProvider {
 function getWebviewContent(status) {
   const isRunning = !!status;
   const isConnected = status && status.connected;
-  const endpoint = status ? status.endpoint || "CPU Runtime" : "Offline";
+  const endpoint = (status && status.connected) ? (status.endpoint || "CPU Runtime") : "None";
   const activeLink = status && status.activeLink ? status.activeLink.name : "Unlinked";
   const activeLinkPath = status && status.activeLink ? status.activeLink.path : "None";
 
