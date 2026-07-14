@@ -53,9 +53,12 @@ class ColabSyncProvider {
       });
     } catch {}
 
+    const divider = new vscode.TreeItem("────────────────────", vscode.TreeItemCollapsibleState.None);
+    divider.label = "─".repeat(24);
+
     if (status) {
       const daemonItem = new vscode.TreeItem("Daemon: Running (Port 8291)", vscode.TreeItemCollapsibleState.None);
-      daemonItem.iconPath = new vscode.ThemeIcon("play-circle");
+      daemonItem.iconPath = new vscode.ThemeIcon("check-all");
       daemonItem.contextValue = "daemon-running";
       items.push(daemonItem);
 
@@ -93,15 +96,74 @@ class ColabSyncProvider {
         noSessionItem.iconPath = new vscode.ThemeIcon("circle-slash");
         items.push(noSessionItem);
       }
+
+      items.push(divider);
+
+      const stopDaemonBtn = new vscode.TreeItem("Stop Daemon Server", vscode.TreeItemCollapsibleState.None);
+      stopDaemonBtn.iconPath = new vscode.ThemeIcon("terminate");
+      stopDaemonBtn.command = {
+        command: "colab-sync.stopDaemon",
+        title: "Stop Daemon Server"
+      };
+      items.push(stopDaemonBtn);
+
+      const linkBtn = new vscode.TreeItem(status.activeLink ? "Change Linked Workspace..." : "Link Current Workspace...", vscode.TreeItemCollapsibleState.None);
+      linkBtn.iconPath = new vscode.ThemeIcon("link");
+      linkBtn.command = {
+        command: "colab-sync.linkWorkspace",
+        title: "Link Workspace"
+      };
+      items.push(linkBtn);
+
+      if (!status.connected) {
+        const provisionBtn = new vscode.TreeItem("Provision GPU Session...", vscode.TreeItemCollapsibleState.None);
+        provisionBtn.iconPath = new vscode.ThemeIcon("cloud-upload");
+        provisionBtn.command = {
+          command: "colab-sync.provisionSession",
+          title: "Provision GPU Session"
+        };
+        items.push(provisionBtn);
+      } else {
+        const syncBtn = new vscode.TreeItem("Force Bidirectional Sync", vscode.TreeItemCollapsibleState.None);
+        syncBtn.iconPath = new vscode.ThemeIcon("sync");
+        syncBtn.command = {
+          command: "colab-sync.forceSync",
+          title: "Force Sync"
+        };
+        items.push(syncBtn);
+
+        const termBtn = new vscode.TreeItem("Open Interactive Terminal", vscode.TreeItemCollapsibleState.None);
+        termBtn.iconPath = new vscode.ThemeIcon("terminal");
+        termBtn.command = {
+          command: "colab-sync.openTerminal",
+          title: "Open Colab Terminal"
+        };
+        items.push(termBtn);
+
+        const disconnectBtn = new vscode.TreeItem("Terminate GPU Session", vscode.TreeItemCollapsibleState.None);
+        disconnectBtn.iconPath = new vscode.ThemeIcon("trash");
+        disconnectBtn.command = {
+          command: "colab-sync.teardownSession",
+          title: "Terminate GPU Session"
+        };
+        items.push(disconnectBtn);
+      }
+
     } else {
       const daemonItem = new vscode.TreeItem("Daemon: Stopped", vscode.TreeItemCollapsibleState.None);
       daemonItem.iconPath = new vscode.ThemeIcon("stop-circle");
       daemonItem.contextValue = "daemon-stopped";
       items.push(daemonItem);
 
-      const linkItem = new vscode.TreeItem("Workspace: (Start daemon first)", vscode.TreeItemCollapsibleState.None);
-      linkItem.iconPath = new vscode.ThemeIcon("question");
-      items.push(linkItem);
+      items.push(divider);
+
+      const startDaemonBtn = new vscode.TreeItem("Start Daemon Server", vscode.TreeItemCollapsibleState.None);
+      startDaemonBtn.iconPath = new vscode.ThemeIcon("play");
+      startDaemonBtn.command = {
+        command: "colab-sync.startDaemon",
+        title: "Start Daemon Server"
+      };
+      items.push(startDaemonBtn);
     }
 
     return items;
@@ -187,6 +249,69 @@ function activate(context) {
           vscode.window.showErrorMessage(`Linking failed: ${err.message}`);
         } else {
           vscode.window.showInformationMessage(`Workspace linked as '${linkName}'`);
+        }
+        provider.refresh();
+      });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("colab-sync.provisionSession", async () => {
+      const selection = await vscode.window.showQuickPick(
+        ["T4 GPU (Free/Paid)", "L4 GPU (Paid Premium)", "A100 GPU (Paid Premium)", "TPU (Paid Premium)"],
+        { placeHolder: "Select accelerator hardware type to provision" }
+      );
+      if (!selection) return;
+
+      let accelerator = "T4";
+      let variant = "GPU";
+      if (selection.startsWith("L4")) {
+        accelerator = "L4";
+      } else if (selection.startsWith("A100")) {
+        accelerator = "A100";
+      } else if (selection.startsWith("TPU")) {
+        variant = "TPU";
+        accelerator = "TPU";
+      }
+
+      vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Provisioning ${selection} runtime on Colab...`,
+        cancellable: false
+      }, async () => {
+        try {
+          const res = await fetch(`${daemonUrl}/v1/status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provision: true, variant, accelerator })
+          });
+          const data = await res.json();
+          if (data.connected) {
+            vscode.window.showInformationMessage(`Successfully connected to remote ${data.endpoint}`);
+          } else {
+            vscode.window.showErrorMessage(`Provisioning failed: ${data.message || "Unknown error"}`);
+          }
+        } catch (err) {
+          vscode.window.showErrorMessage(`Network error calling daemon: ${err.message}`);
+        }
+        provider.refresh();
+      });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("colab-sync.forceSync", () => {
+      vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: "Running bidirectional file synchronization...",
+        cancellable: false
+      }, async () => {
+        try {
+          const res = await fetch(`${daemonUrl}/v1/sync?direction=both`, { method: "POST" });
+          const data = await res.json();
+          vscode.window.showInformationMessage(`Sync complete! Changes tracked: ${JSON.stringify(data.summary || data)}`);
+        } catch (err) {
+          vscode.window.showErrorMessage(`Sync failed: ${err.message}`);
         }
         provider.refresh();
       });
