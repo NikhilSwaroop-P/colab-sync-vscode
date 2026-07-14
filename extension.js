@@ -676,7 +676,8 @@ function getWebviewBaseContent() {
               <div class="section-title">development tools</div>
               <div class="button-group">
                 <button class="btn btn-primary" onclick="triggerCommand(this, 'forceSync')"><div class="spinner"></div>Sync Now</button>
-                <button class="btn" onclick="triggerCommand(this, 'openTerminal')"><div class="spinner"></div>Open Terminal</button>
+                <button class="btn" onclick="triggerCommand(this, 'openTerminal')"><div class="spinner"></div>Open VS Code Shell</button>
+                <button class="btn" onclick="triggerCommand(this, 'openBrowserTerm')"><div class="spinner"></div>Open Browser Console</button>
               </div>
             </div>
           </div>
@@ -736,7 +737,6 @@ function getWebviewBaseContent() {
 
         function updateUI(status) {
           if (status === null && lastStatus !== null) {
-            // Keep last status visual, just fade badge slightly to show reconnecting
             document.getElementById("headerBadge").style.opacity = "0.5";
             return;
           }
@@ -908,6 +908,8 @@ function activate(context) {
           vscode.commands.executeCommand("colab-sync.forceSync");
         } else if (message.command === "openTerminal") {
           vscode.commands.executeCommand("colab-sync.openTerminal");
+        } else if (message.command === "openBrowserTerm") {
+          vscode.commands.executeCommand("colab-sync.openBrowserTerm");
         } else if (message.command === "provisionSession") {
           vscode.commands.executeCommand("colab-sync.provisionSessionFromWebview", message.hardware);
         }
@@ -1212,6 +1214,12 @@ function activate(context) {
         shellArgs: ["/home/crimson/Projects/notebook/colab-sync/colab-term.js"]
       });
       term.show();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("colab-sync.openBrowserTerm", () => {
+      vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${daemonPort}/term`));
     })
   );
 
