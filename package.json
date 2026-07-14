@@ -69,14 +69,24 @@
         "command": "colab-sync.refreshView",
         "title": "Refresh",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "colab-sync.openDashboard",
+        "title": "Open Dashboard",
+        "icon": "$(dashboard)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "colab-sync.openDashboard",
+          "when": "view == colabSyncControl",
+          "group": "navigation@1"
+        },
+        {
           "command": "colab-sync.refreshView",
           "when": "view == colabSyncControl",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
