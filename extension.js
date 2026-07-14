@@ -214,10 +214,26 @@ function getWebviewContent(status) {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Colab Sync Control Center</title>
       <style>
+        :root {
+          --bg-color: #000000;
+          --panel-bg: #131314;
+          --border-color: rgba(255, 255, 255, 0.05);
+          --text-color: #e3e3e3;
+          --label-color: #8e918f;
+          --btn-bg: #1e1f20;
+          --btn-hover: #2a2b2d;
+          --btn-primary: #a8c7fa;
+          --btn-primary-text: #062e6f;
+          --btn-danger: #ffb4ab;
+          --btn-danger-text: #690005;
+          --border-radius: 16px;
+          --btn-radius: 20px;
+        }
+
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-          background: #000000;
-          color: #e3e3e3;
+          background: var(--bg-color);
+          color: var(--text-color);
           margin: 0;
           padding: 24px;
           min-height: 100vh;
@@ -225,7 +241,8 @@ function getWebviewContent(status) {
           overflow-y: auto;
           position: relative;
         }
-        
+
+        /* 1. minimal (gemini) auras */
         .glow-bg {
           position: fixed;
           top: 0;
@@ -236,8 +253,8 @@ function getWebviewContent(status) {
           pointer-events: none;
           overflow: hidden;
           background: #000000;
+          display: none;
         }
-
         .blob {
           position: absolute;
           border-radius: 50%;
@@ -245,7 +262,6 @@ function getWebviewContent(status) {
           opacity: 0.3;
           mix-blend-mode: screen;
         }
-
         .blob-blue {
           width: 300px;
           height: 300px;
@@ -254,7 +270,6 @@ function getWebviewContent(status) {
           left: 20%;
           animation: floatBlue 15s ease-in-out infinite alternate;
         }
-
         .blob-purple {
           width: 250px;
           height: 250px;
@@ -263,23 +278,73 @@ function getWebviewContent(status) {
           right: 25%;
           animation: floatPurple 12s ease-in-out infinite alternate;
         }
-
         @keyframes floatBlue {
           0% { transform: translate(0, 0) scale(1); }
           50% { transform: translate(60px, -40px) scale(1.2); }
           100% { transform: translate(-20px, 20px) scale(0.95); }
         }
-
         @keyframes floatPurple {
           0% { transform: translate(0, 0) scale(1); }
           50% { transform: translate(-50px, -60px) scale(0.9); }
           100% { transform: translate(40px, 30px) scale(1.2); }
         }
 
+        /* 2. space tech stars */
+        .stars-bg {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 1;
+          pointer-events: none;
+          overflow: hidden;
+          display: none;
+        }
+        .star {
+          position: absolute;
+          background: #ffffff;
+          border-radius: 50%;
+          opacity: 0.8;
+          animation: twinkle 4s infinite ease-in-out;
+        }
+        @keyframes twinkle {
+          0%, 100% { opacity: 0.2; transform: scale(0.8); }
+          50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* 3. cyberpunk scanlines */
+        .cyberpunk-bg {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 1;
+          pointer-events: none;
+          overflow: hidden;
+          background: #0a0710;
+          display: none;
+        }
+        .scanline {
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(
+            rgba(18, 16, 16, 0) 50%,
+            rgba(0, 240, 255, 0.08) 50%
+          ), linear-gradient(
+            90deg,
+            rgba(255, 0, 0, 0.03),
+            rgba(0, 255, 0, 0.01),
+            rgba(0, 0, 255, 0.03)
+          );
+          background-size: 100% 4px, 6px 100%;
+        }
+
         .content {
           position: relative;
           z-index: 2;
-          max-width: 800px;
+          max-width: 600px;
           margin: 0 auto;
         }
 
@@ -289,12 +354,13 @@ function getWebviewContent(status) {
           justify-content: space-between;
           margin-bottom: 24px;
         }
-        .title {
-          font-size: 18px;
-          font-weight: 500;
-          color: #e3e3e3;
-          margin: 0;
+        
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
         }
+
         .badge {
           display: inline-flex;
           align-items: center;
@@ -302,18 +368,50 @@ function getWebviewContent(status) {
           font-weight: 500;
           padding: 4px 10px;
           border-radius: 20px;
-          background: ${isRunning ? "rgba(56, 139, 253, 0.1)" : "rgba(248, 81, 73, 0.1)"};
-          color: ${isRunning ? "#58a6ff" : "#ff7b72"};
-          border: 1px solid ${isRunning ? "rgba(56, 139, 253, 0.25)" : "rgba(248, 81, 73, 0.25)"};
+          background: rgba(255, 179, 0, 0.1);
+          color: #ffb300;
+          border: 1px solid rgba(255, 179, 0, 0.25);
         }
+        
+        .badge.active {
+          background: rgba(56, 139, 253, 0.1);
+          color: #58a6ff;
+          border: 1px solid rgba(56, 139, 253, 0.25);
+        }
+
+        .settings-btn {
+          cursor: pointer;
+          background: none;
+          border: none;
+          color: var(--label-color);
+          padding: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 16px;
+        }
+        .settings-btn:hover {
+          color: var(--text-color);
+        }
+
+        .settings-panel {
+          background: var(--panel-bg);
+          border: 1px solid var(--border-color);
+          border-radius: var(--border-radius);
+          padding: 16px;
+          margin-bottom: 20px;
+          display: none;
+        }
+
         .panel {
-          background: #131314;
-          border: 1px solid rgba(255, 255, 255, 0.05);
-          border-radius: 16px;
-          padding: 20px;
+          background: var(--panel-bg);
+          border: 1px solid var(--border-color);
+          border-radius: var(--border-radius);
+          padding: 16px;
           margin-bottom: 20px;
           backdrop-filter: blur(10px);
         }
+
         table {
           width: 100%;
           border-collapse: collapse;
@@ -321,8 +419,8 @@ function getWebviewContent(status) {
           table-layout: fixed;
         }
         td {
-          padding: 10px 14px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+          padding: 12px 14px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.03);
           word-wrap: break-word;
           overflow-wrap: break-word;
         }
@@ -330,17 +428,18 @@ function getWebviewContent(status) {
           border-bottom: none;
         }
         .label {
-          color: #8e918f;
+          color: var(--label-color);
           width: 180px;
         }
         .value {
-          color: #e3e3e3;
+          color: var(--text-color);
           font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
         }
+
         .section-title {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 500;
-          color: #8e918f;
+          color: var(--label-color);
           margin-top: 20px;
           margin-bottom: 10px;
           text-transform: uppercase;
@@ -352,60 +451,121 @@ function getWebviewContent(status) {
           flex-wrap: wrap;
         }
         .btn {
-          background: #1e1f20;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          color: #e3e3e3;
-          padding: 8px 16px;
+          background: var(--btn-bg);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          color: var(--text-color);
+          padding: 8px 18px;
           font-size: 13px;
           font-weight: 500;
-          border-radius: 20px;
+          border-radius: var(--btn-radius);
           cursor: pointer;
-          transition: background 0.2s, border-color 0.2s;
+          transition: all 0.2s;
         }
         .btn:hover {
-          background: #2a2b2d;
-          border-color: rgba(255, 255, 255, 0.15);
+          background: var(--btn-hover);
+          border-color: rgba(255, 255, 255, 0.12);
         }
         .btn-primary {
-          background: #a8c7fa;
-          border-color: #a8c7fa;
-          color: #062e6f;
+          background: var(--btn-primary);
+          border-color: var(--btn-primary);
+          color: var(--btn-primary-text);
         }
         .btn-primary:hover {
-          background: #c2e7ff;
-          border-color: #c2e7ff;
+          filter: brightness(1.1);
         }
         .btn-danger {
-          background: #ffb4ab;
-          border-color: #ffb4ab;
-          color: #690005;
+          background: var(--btn-danger);
+          border-color: var(--btn-danger);
+          color: var(--btn-danger-text);
         }
         .btn-danger:hover {
-          background: #ffdad6;
-          border-color: #ffdad6;
+          filter: brightness(1.1);
         }
         select {
-          background: #131314;
+          background: var(--panel-bg);
           border: 1px solid rgba(255, 255, 255, 0.1);
-          color: #e3e3e3;
+          color: var(--text-color);
           padding: 8px 16px;
           font-size: 13px;
-          border-radius: 20px;
+          border-radius: var(--btn-radius);
           margin-right: 10px;
           outline: none;
+        }
+
+        /* theme specifics */
+        body.theme-cyberpunk {
+          --bg-color: #0a0710;
+          --panel-bg: #100b1d;
+          --border-color: #00f0ff;
+          --text-color: #00f0ff;
+          --label-color: #ff007f;
+          --btn-bg: #1c1433;
+          --btn-hover: #ff007f;
+          --btn-primary: #00f0ff;
+          --btn-primary-text: #0a0710;
+          --btn-danger: #ff007f;
+          --btn-danger-text: #ffffff;
+          --border-radius: 4px;
+          --btn-radius: 4px;
+        }
+        body.theme-cyberpunk .panel {
+          box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+        }
+        body.theme-cyberpunk .btn {
+          text-transform: uppercase;
+          font-family: monospace;
+          box-shadow: 0 0 5px rgba(255, 0, 127, 0.2);
+        }
+
+        body.theme-space {
+          --bg-color: #060913;
+          --panel-bg: rgba(22, 27, 42, 0.65);
+          --border-color: rgba(255, 255, 255, 0.1);
+          --text-color: #e3e3e3;
+          --label-color: #8fa0b5;
+          --btn-bg: #1a2238;
+          --btn-hover: #263554;
+          --btn-primary: #38bdf8;
+          --btn-primary-text: #0f172a;
+          --btn-danger: #f87171;
+          --btn-danger-text: #450a0a;
+          --border-radius: 12px;
+          --btn-radius: 8px;
         }
       </style>
     </head>
     <body>
-      <div class="glow-bg">
+      <!-- backgrounds -->
+      <div id="geminiBg" class="glow-bg">
         <div class="blob blob-blue"></div>
         <div class="blob blob-purple"></div>
+      </div>
+
+      <div id="spaceBg" class="stars-bg"></div>
+
+      <div id="cyberpunkBg" class="cyberpunk-bg">
+        <div class="scanline"></div>
       </div>
 
       <div class="content">
         <div class="header">
           <h1 class="title">colabd connection</h1>
-          <span class="badge">${isRunning ? "active" : "offline"}</span>
+          <div class="header-actions">
+            <span class="badge ${isRunning ? "active" : ""}">offline</span>
+            <button class="settings-btn" onclick="toggleSettings()">⚙</button>
+          </div>
+        </div>
+
+        <div id="settingsPanel" class="settings-panel">
+          <div class="section-title" style="margin-top: 0;">UI Customization</div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Theme Theme</span>
+            <select id="themeSelect" onchange="changeTheme(this.value)">
+              <option value="minimal">Minimal (Gemini)</option>
+              <option value="space">Deep Space Tech</option>
+              <option value="cyberpunk">Neo-Retro Cyberpunk</option>
+            </select>
+          </div>
         </div>
 
         <div class="panel">
@@ -440,7 +600,7 @@ function getWebviewContent(status) {
           ${isRunning ? 
             `<button class="btn btn-danger" onclick="sendCommand('stopDaemon')">Stop Server</button>` : 
             `<button class="btn btn-primary" onclick="sendCommand('startDaemon')">Start Server</button>`
-        }
+          }
           <button class="btn" onclick="sendCommand('linkWorkspace')" ${!isRunning ? "disabled" : ""}>Link Folder...</button>
         </div>
 
@@ -474,6 +634,7 @@ function getWebviewContent(status) {
 
       <script>
         const vscode = acquireVsCodeApi();
+        
         function sendCommand(cmd) {
           vscode.postMessage({ command: cmd });
         }
@@ -481,6 +642,43 @@ function getWebviewContent(status) {
           const hardware = document.getElementById("hardwareSelect").value;
           vscode.postMessage({ command: 'provisionSession', hardware: hardware });
         }
+
+        function toggleSettings() {
+          const p = document.getElementById("settingsPanel");
+          p.style.display = p.style.display === "block" ? "none" : "block";
+        }
+
+        function changeTheme(theme) {
+          document.body.className = "theme-" + theme;
+          
+          document.getElementById("geminiBg").style.display = theme === "minimal" ? "block" : "none";
+          document.getElementById("spaceBg").style.display = theme === "space" ? "block" : "none";
+          document.getElementById("cyberpunkBg").style.display = theme === "cyberpunk" ? "block" : "none";
+          
+          vscode.setState({ theme: theme });
+        }
+
+        // Starfield generator
+        function generateStars() {
+          const container = document.getElementById("spaceBg");
+          container.innerHTML = "";
+          for(let i=0; i<60; i++) {
+            const star = document.createElement("div");
+            star.className = "star";
+            star.style.width = Math.random() * 3 + "px";
+            star.style.height = star.style.width;
+            star.style.left = Math.random() * 100 + "%";
+            star.style.top = Math.random() * 100 + "%";
+            star.style.animationDelay = Math.random() * 4 + "s";
+            container.appendChild(star);
+          }
+        }
+
+        // Initialize state
+        const state = vscode.getState() || { theme: "minimal" };
+        changeTheme(state.theme);
+        document.getElementById("themeSelect").value = state.theme;
+        generateStars();
       </script>
     </body>
     </html>
@@ -778,7 +976,7 @@ function activate(context) {
           const data = await res.json();
           if (data.connected) {
             const ep = data.endpoint || "Standard CPU";
-            vscode.window.showInformationMessage(`Successfully connected to remote ${ep}`);
+            vscode.window.showInformationMessage("Successfully connected to remote session.");
           } else {
             vscode.window.showErrorMessage(`Provisioning failed: ${data.message || "Unknown error"}`);
           }
