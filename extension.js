@@ -1,6 +1,8 @@
 const vscode = require("vscode");
 const { exec, spawn } = require("child_process");
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 
 const daemonPort = 8291;
 const daemonUrl = `http://127.0.0.1:${daemonPort}`;
@@ -74,8 +76,9 @@ class ColabSyncProvider {
         items.push(linkItem);
       }
 
-      if (status.connected && status.endpoint) {
-        const sessionItem = new vscode.TreeItem(`Session: ${status.endpoint}`, vscode.TreeItemCollapsibleState.Expanded);
+      if (status.connected) {
+        const endpointName = status.endpoint || "CPU Runtime";
+        const sessionItem = new vscode.TreeItem(`Session: ${endpointName}`, vscode.TreeItemCollapsibleState.Expanded);
         sessionItem.iconPath = new vscode.ThemeIcon("circle-large-filled");
         sessionItem.contextValue = "session-item";
 
@@ -87,12 +90,14 @@ class ColabSyncProvider {
           } else if (ccu.freeCcuQuotaInfo?.remainingTokens) {
             const tokens = parseInt(ccu.freeCcuQuotaInfo.remainingTokens, 10);
             const mins = Math.floor(((tokens / 1000) / rate * 60) / 10) * 10;
-            sessionItem.quota = `Free GPU Quota: ${Math.floor(mins / 60)}h ${mins % 60}m left`;
+            sessionItem.quota = `Free Quota: ${Math.floor(mins / 60)}h ${mins % 60}m left`;
           }
+        } else {
+          sessionItem.quota = "Active Session connected";
         }
         items.push(sessionItem);
       } else {
-        const noSessionItem = new vscode.TreeItem("No active GPU sessions", vscode.TreeItemCollapsibleState.None);
+        const noSessionItem = new vscode.TreeItem("No active Colab sessions", vscode.TreeItemCollapsibleState.None);
         noSessionItem.iconPath = new vscode.ThemeIcon("circle-slash");
         items.push(noSessionItem);
       }
@@ -107,7 +112,7 @@ class ColabSyncProvider {
       };
       items.push(stopDaemonBtn);
 
-      const linkBtn = new vscode.TreeItem(status.activeLink ? "Change Linked Workspace..." : "Link Current Workspace...", vscode.TreeItemCollapsibleState.None);
+      const linkBtn = new vscode.TreeItem(status.activeLink ? "Change Linked Workspace..." : "Link Workspace Folder...", vscode.TreeItemCollapsibleState.None);
       linkBtn.iconPath = new vscode.ThemeIcon("link");
       linkBtn.command = {
         command: "colab-sync.linkWorkspace",
@@ -116,11 +121,11 @@ class ColabSyncProvider {
       items.push(linkBtn);
 
       if (!status.connected) {
-        const provisionBtn = new vscode.TreeItem("Provision GPU Session...", vscode.TreeItemCollapsibleState.None);
+        const provisionBtn = new vscode.TreeItem("Provision Active Session...", vscode.TreeItemCollapsibleState.None);
         provisionBtn.iconPath = new vscode.ThemeIcon("cloud-upload");
         provisionBtn.command = {
           command: "colab-sync.provisionSession",
-          title: "Provision GPU Session"
+          title: "Provision Active Session"
         };
         items.push(provisionBtn);
       } else {
@@ -140,11 +145,11 @@ class ColabSyncProvider {
         };
         items.push(termBtn);
 
-        const disconnectBtn = new vscode.TreeItem("Terminate GPU Session", vscode.TreeItemCollapsibleState.None);
+        const disconnectBtn = new vscode.TreeItem("Terminate Session", vscode.TreeItemCollapsibleState.None);
         disconnectBtn.iconPath = new vscode.ThemeIcon("trash");
         disconnectBtn.command = {
           command: "colab-sync.teardownSession",
-          title: "Terminate GPU Session"
+          title: "Terminate Session"
         };
         items.push(disconnectBtn);
       }
@@ -230,25 +235,71 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand("colab-sync.linkWorkspace", async () => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders || workspaceFolders.length === 0) {
-        vscode.window.showErrorMessage("No open workspace folders to link.");
-        return;
-      }
-      const folderPath = workspaceFolders[0].uri.fsPath;
-      const folderName = workspaceFolders[0].name;
+      const rootPath = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : null;
 
+      const options = [
+        { label: "Link Current Workspace Root", description: rootPath },
+        { label: "Link a Subfolder of the Current Workspace...", description: "List and pick a subfolder" },
+        { label: "Choose another folder on your system...", description: "Opens directory dialog" }
+      ];
+
+      const choice = await vscode.window.showQuickPick(options, { placeHolder: "Select directory to link" });
+      if (!choice) return;
+
+      let targetFolder = "";
+
+      if (choice.label === "Link Current Workspace Root") {
+        if (!rootPath) {
+          vscode.window.showErrorMessage("No open workspace root found.");
+          return;
+        }
+        targetFolder = rootPath;
+      } else if (choice.label === "Link a Subfolder of the Current Workspace...") {
+        if (!rootPath) {
+          vscode.window.showErrorMessage("No open workspace root found.");
+          return;
+        }
+        try {
+          const subdirs = fs.readdirSync(rootPath, { withFileTypes: true })
+            .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith("."))
+            .map(dirent => path.join(rootPath, dirent.name));
+
+          if (subdirs.length === 0) {
+            vscode.window.showInformationMessage("No subdirectories found in workspace root.");
+            return;
+          }
+
+          const pickedSub = await vscode.window.showQuickPick(subdirs, { placeHolder: "Select a subfolder" });
+          if (!pickedSub) return;
+          targetFolder = pickedSub;
+        } catch (err) {
+          vscode.window.showErrorMessage(`Failed reading directories: ${err.message}`);
+          return;
+        }
+      } else if (choice.label === "Choose another folder on your system...") {
+        const uris = await vscode.window.showOpenDialog({
+          canSelectFiles: false,
+          canSelectFolders: true,
+          canSelectMany: false,
+          openLabel: "Select Folder to Link"
+        });
+        if (!uris || uris.length === 0) return;
+        targetFolder = uris[0].fsPath;
+      }
+
+      const defaultName = path.basename(targetFolder);
       const linkName = await vscode.window.showInputBox({
-        prompt: "Enter a link name for this workspace",
-        value: folderName
+        prompt: "Enter a link name for this workspace configuration",
+        value: defaultName
       });
 
       if (!linkName) return;
 
-      exec(`node /home/crimson/Projects/notebook/colab-sync/src/colabd.js link "${folderPath}" --name "${linkName}"`, (err) => {
+      exec(`node /home/crimson/Projects/notebook/colab-sync/src/colabd.js link "${targetFolder}" --name "${linkName}"`, (err) => {
         if (err) {
           vscode.window.showErrorMessage(`Linking failed: ${err.message}`);
         } else {
-          vscode.window.showInformationMessage(`Workspace linked as '${linkName}'`);
+          vscode.window.showInformationMessage(`Workspace successfully linked as '${linkName}'`);
         }
         provider.refresh();
       });
@@ -258,16 +309,28 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand("colab-sync.provisionSession", async () => {
       const selection = await vscode.window.showQuickPick(
-        ["T4 GPU (Free/Paid)", "L4 GPU (Paid Premium)", "A100 GPU (Paid Premium)", "TPU (Paid Premium)"],
+        [
+          "Standard CPU (Free/Paid Standard)",
+          "T4 GPU (Free/Paid Standard)",
+          "L4 GPU (Paid Premium)",
+          "A100 GPU (Paid Premium)",
+          "TPU (Paid Premium)"
+        ],
         { placeHolder: "Select accelerator hardware type to provision" }
       );
       if (!selection) return;
 
-      let accelerator = "T4";
-      let variant = "GPU";
-      if (selection.startsWith("L4")) {
+      let accelerator = "";
+      let variant = "DEFAULT";
+
+      if (selection.startsWith("T4")) {
+        variant = "GPU";
+        accelerator = "T4";
+      } else if (selection.startsWith("L4")) {
+        variant = "GPU";
         accelerator = "L4";
       } else if (selection.startsWith("A100")) {
+        variant = "GPU";
         accelerator = "A100";
       } else if (selection.startsWith("TPU")) {
         variant = "TPU";
@@ -287,7 +350,8 @@ function activate(context) {
           });
           const data = await res.json();
           if (data.connected) {
-            vscode.window.showInformationMessage(`Successfully connected to remote ${data.endpoint}`);
+            const ep = data.endpoint || "Standard CPU";
+            vscode.window.showInformationMessage(`Successfully connected to remote ${ep}`);
           } else {
             vscode.window.showErrorMessage(`Provisioning failed: ${data.message || "Unknown error"}`);
           }
@@ -320,7 +384,7 @@ function activate(context) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("colab-sync.teardownSession", () => {
-      vscode.window.showWarningMessage("Are you sure you want to terminate the Colab GPU session?", "Yes", "No")
+      vscode.window.showWarningMessage("Are you sure you want to terminate the Colab session?", "Yes", "No")
         .then(async (answer) => {
           if (answer === "Yes") {
             try {
@@ -332,7 +396,7 @@ function activate(context) {
               }, (res) => {
                 res.on("data", () => {});
                 res.on("end", () => {
-                  vscode.window.showInformationMessage("Colab GPU session terminated.");
+                  vscode.window.showInformationMessage("Colab session terminated.");
                   provider.refresh();
                 });
               });
