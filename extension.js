@@ -1017,29 +1017,44 @@ function activate(context) {
   async function updateWebview() {
     const status = await getDaemonStatus();
     if (status) {
-      let ramText = "";
-      if (status.resources && status.resources.memory) {
-        const ramTotal = (status.resources.memory.totalBytes || 1) / (1024 * 1024 * 1024);
-        const ramFree = (status.resources.memory.freeBytes || 0) / (1024 * 1024 * 1024);
-        const ramUsage = ramTotal - ramFree;
-        ramText = ` | RAM: ${ramUsage.toFixed(1)}/${ramTotal.toFixed(0)}G`;
+      let metricsText = "";
+      if (status.resources) {
+        if (status.resources.memory) {
+          const ramTotal = (status.resources.memory.totalBytes || 1) / (1024 * 1024 * 1024);
+          const ramFree = (status.resources.memory.freeBytes || 0) / (1024 * 1024 * 1024);
+          const ramUsage = ramTotal - ramFree;
+          metricsText += ` | RAM: ${ramUsage.toFixed(1)}/${ramTotal.toFixed(0)}G`;
+        }
+        if (status.resources.disks && status.resources.disks.length > 0) {
+          const disk = status.resources.disks[0].filesystem;
+          const diskUsage = disk.usedBytes / (1024 * 1024 * 1024);
+          const diskTotal = disk.totalBytes / (1024 * 1024 * 1024);
+          metricsText += ` | Disk: ${diskUsage.toFixed(0)}/${diskTotal.toFixed(0)}G`;
+        }
+        if (status.resources.gpus && status.resources.gpus.length > 0) {
+          const gpu = status.resources.gpus[0];
+          const gpuTotal = (gpu.memory?.totalBytes || 1) / (1024 * 1024 * 1024);
+          const gpuFree = (gpu.memory?.freeBytes || 0) / (1024 * 1024 * 1024);
+          const gpuUsage = gpu.memory?.usedBytes !== undefined ? (gpu.memory.usedBytes / (1024 * 1024 * 1024)) : (gpuTotal - gpuFree);
+          metricsText += ` | VRAM: ${gpuUsage.toFixed(1)}/${gpuTotal.toFixed(0)}G`;
+        }
       }
 
       if (status.connected && status.syncLevel) {
         const outG = status.syncLevel.outgoing || 0;
         const inG = status.syncLevel.incoming || 0;
         if (status.syncLevel.conflicts > 0) {
-          statusBarItem.text = `$(alert) Colab: ${status.syncLevel.conflicts} conflicts!${ramText}`;
+          statusBarItem.text = `$(alert) Colab: ${status.syncLevel.conflicts} conflicts!${metricsText}`;
           statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
         } else {
-          statusBarItem.text = `$(sync) Colab: ↑${outG} ↓${inG}${ramText}`;
+          statusBarItem.text = `$(sync) Colab: ↑${outG} ↓${inG}${metricsText}`;
           statusBarItem.backgroundColor = undefined;
         }
       } else if (status.connected) {
-        statusBarItem.text = `$(sync) Colab: Connected${ramText}`;
+        statusBarItem.text = `$(sync) Colab: Connected${metricsText}`;
         statusBarItem.backgroundColor = undefined;
       } else {
-        statusBarItem.text = `$(sync) Colab: Linked (No Session)${ramText}`;
+        statusBarItem.text = `$(sync) Colab: Linked (No Session)${metricsText}`;
         statusBarItem.backgroundColor = undefined;
       }
     } else {
@@ -1411,6 +1426,9 @@ function activate(context) {
       procKitty.unref();
     })
   );
+
+  // Run update immediately on activation to resolve initial display gaps
+  updateWebview();
 
   const interval = setInterval(() => {
     updateWebview();
