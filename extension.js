@@ -655,6 +655,14 @@ function getWebviewBaseContent() {
                       <td class="label">quota remaining</td>
                       <td id="cellQuota" class="value">-</td>
                     </tr>
+                    <tr>
+                      <td class="label">outgoing changes</td>
+                      <td id="cellOutgoing" class="value">0 files</td>
+                    </tr>
+                    <tr>
+                      <td class="label">incoming changes</td>
+                      <td id="cellIncoming" class="value">0 files</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -677,7 +685,7 @@ function getWebviewBaseContent() {
               <div class="button-group">
                 <button class="btn btn-primary" onclick="triggerCommand(this, 'forceSync')"><div class="spinner"></div>Sync Now</button>
                 <button class="btn" onclick="triggerCommand(this, 'openTerminal')"><div class="spinner"></div>Open VS Code Shell</button>
-                <button class="btn" onclick="triggerCommand(this, 'openBrowserTerm')"><div class="spinner"></div>Open Browser Console</button>
+                <button class="btn" onclick="triggerCommand(this, 'openExternalTerminal')"><div class="spinner"></div>Open External Terminal</button>
               </div>
             </div>
           </div>
@@ -782,6 +790,14 @@ function getWebviewBaseContent() {
           document.getElementById("cellRate").innerText = rateText;
           document.getElementById("cellQuota").innerText = usageLeftText;
 
+          if (status && status.syncLevel) {
+            document.getElementById("cellOutgoing").innerText = status.syncLevel.outgoing + " files";
+            document.getElementById("cellIncoming").innerText = status.syncLevel.incoming + " files";
+          } else {
+            document.getElementById("cellOutgoing").innerText = "0 files";
+            document.getElementById("cellIncoming").innerText = "0 files";
+          }
+
           // Buttons Server control
           const serverGroup = document.getElementById("btnGroupServer");
           if (isRunning) {
@@ -852,6 +868,11 @@ function activate(context) {
   vscode.window.registerTreeDataProvider("colabSyncControl", provider);
 
   let activeWebview = null;
+  let statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusBarItem.text = "$(sync) Colab Sync: Stopped";
+  statusBarItem.command = "colab-sync.openDashboard";
+  statusBarItem.show();
+  context.subscriptions.push(statusBarItem);
 
   async function getDaemonStatus() {
     return new Promise((resolve) => {
@@ -859,7 +880,27 @@ function activate(context) {
         let body = "";
         res.on("data", (chunk) => body += chunk);
         res.on("end", () => {
-          if (res.statusCode === 200) resolve(JSON.parse(body));
+          if (res.statusCode === 200) {
+            const data = JSON.parse(body);
+            if (data.connected && data.activeLink) {
+              const syncReq = http.get(`${daemonUrl}/v1/sync`, { timeout: 3000 }, (syncRes) => {
+                let syncBody = "";
+                syncRes.on("data", (c) => syncBody += c);
+                syncRes.on("end", () => {
+                  if (syncRes.statusCode === 200) {
+                    try {
+                      data.syncLevel = JSON.parse(syncBody);
+                    } catch {}
+                  }
+                  resolve(data);
+                });
+              });
+              syncReq.on("error", () => resolve(data));
+              syncReq.end();
+            } else {
+              resolve(data);
+            }
+          }
           else resolve(null);
         });
       });
@@ -872,9 +913,33 @@ function activate(context) {
   }
 
   async function updateWebview() {
-    if (!activeWebview) return;
     const status = await getDaemonStatus();
-    activeWebview.webview.postMessage({ type: 'updateStatus', status });
+    if (status) {
+      if (status.connected && status.syncLevel) {
+        const outG = status.syncLevel.outgoing || 0;
+        const inG = status.syncLevel.incoming || 0;
+        if (status.syncLevel.conflicts > 0) {
+          statusBarItem.text = `$(alert) Colab Sync: ${status.syncLevel.conflicts} conflicts!`;
+          statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+        } else {
+          statusBarItem.text = `$(sync) Colab: ↑${outG} ↓${inG}`;
+          statusBarItem.backgroundColor = undefined;
+        }
+      } else if (status.connected) {
+        statusBarItem.text = "$(sync) Colab: Connected";
+        statusBarItem.backgroundColor = undefined;
+      } else {
+        statusBarItem.text = "$(sync) Colab: Linked (No Session)";
+        statusBarItem.backgroundColor = undefined;
+      }
+    } else {
+      statusBarItem.text = "$(sync) Colab: Stopped";
+      statusBarItem.backgroundColor = undefined;
+    }
+
+    if (activeWebview) {
+      activeWebview.webview.postMessage({ type: 'updateStatus', status });
+    }
   }
 
   context.subscriptions.push(
@@ -908,16 +973,15 @@ function activate(context) {
           vscode.commands.executeCommand("colab-sync.forceSync");
         } else if (message.command === "openTerminal") {
           vscode.commands.executeCommand("colab-sync.openTerminal");
-        } else if (message.command === "openBrowserTerm") {
-          vscode.commands.executeCommand("colab-sync.openBrowserTerm");
+        } else if (message.command === "openExternalTerminal") {
+          vscode.commands.executeCommand("colab-sync.openExternalTerminal");
         } else if (message.command === "provisionSession") {
           vscode.commands.executeCommand("colab-sync.provisionSessionFromWebview", message.hardware);
         }
       }, null, context.subscriptions);
 
       activeWebview.webview.html = getWebviewBaseContent();
-      const status = await getDaemonStatus();
-      activeWebview.webview.postMessage({ type: 'updateStatus', status });
+      await updateWebview();
     })
   );
 
@@ -1218,8 +1282,20 @@ function activate(context) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("colab-sync.openBrowserTerm", () => {
-      vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${daemonPort}/term`));
+    vscode.commands.registerCommand("colab-sync.openExternalTerminal", () => {
+      const scriptPath = "/home/crimson/Projects/notebook/colab-sync/colab-term.js";
+      const proc = spawn("gnome-terminal", ["--", "node", scriptPath], {
+        detached: true,
+        stdio: "ignore"
+      });
+      proc.on("error", () => {
+        const fallback = spawn("xterm", ["-e", "node", scriptPath], {
+          detached: true,
+          stdio: "ignore"
+        });
+        fallback.unref();
+      });
+      proc.unref();
     })
   );
 
