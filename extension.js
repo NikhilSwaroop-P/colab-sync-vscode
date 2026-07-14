@@ -214,6 +214,12 @@ function getWebviewContent(status) {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Colab Sync Control Center</title>
       <style>
+        @property --angle {
+          syntax: '<angle>';
+          initial-value: 0deg;
+          inherits: false;
+        }
+
         :root {
           --bg-color: #000000;
           --panel-bg: #131314;
@@ -324,7 +330,7 @@ function getWebviewContent(status) {
           z-index: 1;
           pointer-events: none;
           overflow: hidden;
-          background: #0b0914;
+          background: #0d0c1d;
           display: none;
         }
 
@@ -447,6 +453,7 @@ function getWebviewContent(status) {
           flex-wrap: wrap;
           margin-top: 10px;
         }
+        
         .btn {
           background: var(--btn-bg);
           border: 1px solid rgba(255, 255, 255, 0.06);
@@ -459,6 +466,7 @@ function getWebviewContent(status) {
           transition: all 0.2s;
           display: inline-flex;
           align-items: center;
+          position: relative;
         }
         .btn:hover {
           background: var(--btn-hover);
@@ -481,7 +489,29 @@ function getWebviewContent(status) {
           filter: brightness(1.1);
         }
         
-        /* Model Selector Capsule Dropdown styling */
+        /* Rotating click animation dots spinner */
+        .spinner {
+          display: none;
+          width: 12px;
+          height: 12px;
+          border: 2px solid rgba(255,255,255,0.2);
+          border-top-color: currentColor;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin-right: 8px;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        
+        .btn.loading .spinner {
+          display: inline-block;
+        }
+        .btn.loading {
+          pointer-events: none;
+          opacity: 0.8;
+        }
+
         select {
           background: #1e1f20;
           border: 1px solid rgba(255, 255, 255, 0.08);
@@ -518,12 +548,13 @@ function getWebviewContent(status) {
           --btn-danger-text: #ff00ff;
           --border-radius: 12px;
           --btn-radius: 8px;
-          --card-padding: 2px; /* border thickness helper */
+          --card-padding: 2px;
         }
         
         body.theme-cyberpunk .outer-wrapper {
-          background-image: linear-gradient(135deg, #00f0ff, #ff00ff);
-          padding: 2px; /* acts as border */
+          background-image: linear-gradient(var(--angle), #00f0ff, #ff00ff);
+          padding: 2px;
+          animation: rotateAngle 4s linear infinite;
         }
         body.theme-cyberpunk .inner-wrapper {
           background: #0d0c1d;
@@ -532,13 +563,19 @@ function getWebviewContent(status) {
         }
 
         body.theme-cyberpunk .panel {
-          background-image: linear-gradient(135deg, #00f0ff, #ff00ff);
-          padding: 2px; /* acts as border */
+          background-image: linear-gradient(var(--angle), #00f0ff, #ff00ff);
+          padding: 2px;
+          animation: rotateAngle 4s linear infinite;
         }
         body.theme-cyberpunk .panel-inner {
           background: #0d0c1d;
           border-radius: 10px;
           padding: 12px;
+        }
+
+        @keyframes rotateAngle {
+          0% { --angle: 0deg; }
+          100% { --angle: 360deg; }
         }
 
         body.theme-cyberpunk .btn {
@@ -660,17 +697,17 @@ function getWebviewContent(status) {
             <div class="section-title">server control</div>
             <div class="button-group" style="margin-bottom: 20px;">
               ${isRunning ? 
-                `<button class="btn btn-danger" onclick="sendCommand('stopDaemon')">Stop Server</button>` : 
-                `<button class="btn btn-primary" onclick="sendCommand('startDaemon')">Start Server</button>`
+                `<button class="btn btn-danger" onclick="triggerCommand(this, 'stopDaemon')"><div class="spinner"></div>Stop Server</button>` : 
+                `<button class="btn btn-primary" onclick="triggerCommand(this, 'startDaemon')"><div class="spinner"></div>Start Server</button>`
               }
-              <button class="btn" onclick="sendCommand('linkWorkspace')" ${!isRunning ? "disabled" : ""}>Link Folder...</button>
+              <button class="btn" onclick="triggerCommand(this, 'linkWorkspace')" ${!isRunning ? "disabled" : ""}><div class="spinner"></div>Link Folder...</button>
             </div>
 
             ${isRunning ? `
               <div class="section-title">session allocation</div>
               <div class="button-group" style="margin-bottom: 20px;">
                 ${isConnected ? 
-                  `<button class="btn btn-danger" onclick="sendCommand('teardownSession')">Terminate Session</button>` :
+                  `<button class="btn btn-danger" onclick="triggerCommand(this, 'teardownSession')"><div class="spinner"></div>Terminate Session</button>` :
                   `
                     <select id="hardwareSelect">
                       <option value="Standard CPU">Standard CPU (Free/Paid Standard)</option>
@@ -679,7 +716,7 @@ function getWebviewContent(status) {
                       <option value="A100 GPU">A100 GPU (Paid Premium)</option>
                       <option value="TPU">TPU (Paid Premium)</option>
                     </select>
-                    <button class="btn btn-primary" onclick="provision()">Claim Session</button>
+                    <button class="btn btn-primary" onclick="provision(this)"><div class="spinner"></div>Claim Session</button>
                   `
                 }
               </div>
@@ -688,8 +725,8 @@ function getWebviewContent(status) {
             ${isConnected ? `
               <div class="section-title">development tools</div>
               <div class="button-group">
-                <button class="btn btn-primary" onclick="sendCommand('forceSync')">Sync Now</button>
-                <button class="btn" onclick="sendCommand('openTerminal')">Open Terminal</button>
+                <button class="btn btn-primary" onclick="triggerCommand(this, 'forceSync')"><div class="spinner"></div>Sync Now</button>
+                <button class="btn" onclick="triggerCommand(this, 'openTerminal')"><div class="spinner"></div>Open Terminal</button>
               </div>
             ` : ""}
           </div>
@@ -699,12 +736,21 @@ function getWebviewContent(status) {
       <script>
         const vscode = acquireVsCodeApi();
         
-        function sendCommand(cmd) {
+        function triggerCommand(btn, cmd) {
+          btn.classList.add("loading");
           vscode.postMessage({ command: cmd });
+          setTimeout(() => {
+            btn.classList.remove("loading");
+          }, 4000);
         }
-        function provision() {
+
+        function provision(btn) {
+          btn.classList.add("loading");
           const hardware = document.getElementById("hardwareSelect").value;
           vscode.postMessage({ command: 'provisionSession', hardware: hardware });
+          setTimeout(() => {
+            btn.classList.remove("loading");
+          }, 8000);
         }
 
         function toggleSettings() {
@@ -1040,7 +1086,7 @@ function activate(context) {
           const data = await res.json();
           if (data.connected) {
             const ep = data.endpoint || "Standard CPU";
-            vscode.window.showInformationMessage(`Successfully connected to remote ${ep}`);
+            vscode.window.showInformationMessage("Successfully connected to remote session.");
           } else {
             vscode.window.showErrorMessage(`Provisioning failed: ${data.message || "Unknown error"}`);
           }
