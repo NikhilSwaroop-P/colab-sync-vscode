@@ -107,10 +107,73 @@ class ColabSyncProvider {
         noSessionItem.iconPath = new vscode.ThemeIcon("circle-slash");
         items.push(noSessionItem);
       }
+
+      items.push(divider);
+
+      const stopDaemonBtn = new vscode.TreeItem("Stop Daemon Server", vscode.TreeItemCollapsibleState.None);
+      stopDaemonBtn.iconPath = new vscode.ThemeIcon("terminate");
+      stopDaemonBtn.command = {
+        command: "colab-sync.stopDaemon",
+        title: "Stop Daemon Server"
+      };
+      items.push(stopDaemonBtn);
+
+      const linkBtn = new vscode.TreeItem(status.activeLink ? "Change Linked Workspace..." : "Link Workspace Folder...", vscode.TreeItemCollapsibleState.None);
+      linkBtn.iconPath = new vscode.ThemeIcon("link");
+      linkBtn.command = {
+        command: "colab-sync.linkWorkspace",
+        title: "Link Workspace"
+      };
+      items.push(linkBtn);
+
+      if (!status.connected) {
+        const provisionBtn = new vscode.TreeItem("Provision Active Session...", vscode.TreeItemCollapsibleState.None);
+        provisionBtn.iconPath = new vscode.ThemeIcon("cloud-upload");
+        provisionBtn.command = {
+          command: "colab-sync.provisionSession",
+          title: "Provision Active Session"
+        };
+        items.push(provisionBtn);
+      } else {
+        const syncBtn = new vscode.TreeItem("Force Bidirectional Sync", vscode.TreeItemCollapsibleState.None);
+        syncBtn.iconPath = new vscode.ThemeIcon("sync");
+        syncBtn.command = {
+          command: "colab-sync.forceSync",
+          title: "Force Sync"
+        };
+        items.push(syncBtn);
+
+        const termBtn = new vscode.TreeItem("Open Interactive Terminal", vscode.TreeItemCollapsibleState.None);
+        termBtn.iconPath = new vscode.ThemeIcon("terminal");
+        termBtn.command = {
+          command: "colab-sync.openTerminal",
+          title: "Open Colab Terminal"
+        };
+        items.push(termBtn);
+
+        const disconnectBtn = new vscode.TreeItem("Terminate Session", vscode.TreeItemCollapsibleState.None);
+        disconnectBtn.iconPath = new vscode.ThemeIcon("trash");
+        disconnectBtn.command = {
+          command: "colab-sync.teardownSession",
+          title: "Terminate Session"
+        };
+        items.push(disconnectBtn);
+      }
+
     } else {
       const daemonItem = new vscode.TreeItem("Daemon: Stopped", vscode.TreeItemCollapsibleState.None);
       daemonItem.iconPath = new vscode.ThemeIcon("stop-circle");
       items.push(daemonItem);
+
+      items.push(divider);
+
+      const startDaemonBtn = new vscode.TreeItem("Start Daemon Server", vscode.TreeItemCollapsibleState.None);
+      startDaemonBtn.iconPath = new vscode.ThemeIcon("play");
+      startDaemonBtn.command = {
+        command: "colab-sync.startDaemon",
+        title: "Start Daemon Server"
+      };
+      items.push(startDaemonBtn);
     }
 
     return items;
@@ -135,11 +198,11 @@ function getWebviewContent(status) {
     if (ccu.paidComputeUnitsBalance > 0) {
       const balance = ccu.paidComputeUnitsBalance;
       const hoursLeft = (balance / rate).toFixed(2);
-      usageLeftText = `${balance.toFixed(2)} CU (~${hoursLeft} hours left)`;
+      usageLeftText = `${balance.toFixed(2)} CU (~${hoursLeft}h left)`;
     } else if (ccu.freeCcuQuotaInfo?.remainingTokens) {
       const tokens = parseInt(ccu.freeCcuQuotaInfo.remainingTokens, 10);
       const hoursLeft = ((tokens / 1000) / rate).toFixed(2);
-      usageLeftText = `${tokens} Tokens (~${hoursLeft} hours left)`;
+      usageLeftText = `${tokens} Tokens (~${hoursLeft}h left)`;
     }
   }
 
@@ -153,23 +216,25 @@ function getWebviewContent(status) {
       <style>
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-          background: #0d1117;
-          color: #c9d1d9;
+          background: #000000;
+          color: #e3e3e3;
           margin: 0;
-          padding: 20px;
+          padding: 24px;
+          height: 100vh;
+          box-sizing: border-box;
+          background-image: linear-gradient(180deg, #000000 60%, #051329 100%);
+          background-attachment: fixed;
         }
         .header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-bottom: 1px solid #21262d;
-          padding-bottom: 12px;
-          margin-bottom: 20px;
+          margin-bottom: 24px;
         }
         .title {
-          font-size: 16px;
-          font-weight: 600;
-          color: #f0f6fc;
+          font-size: 18px;
+          font-weight: 500;
+          color: #e3e3e3;
           margin: 0;
         }
         .badge {
@@ -177,131 +242,143 @@ function getWebviewContent(status) {
           align-items: center;
           font-size: 11px;
           font-weight: 500;
-          padding: 3px 8px;
-          border-radius: 2em;
-          background: ${isRunning ? "rgba(56, 139, 253, 0.15)" : "rgba(248, 81, 73, 0.15)"};
+          padding: 4px 10px;
+          border-radius: 20px;
+          background: ${isRunning ? "rgba(56, 139, 253, 0.1)" : "rgba(248, 81, 73, 0.1)"};
           color: ${isRunning ? "#58a6ff" : "#ff7b72"};
-          border: 1px solid ${isRunning ? "rgba(56, 139, 253, 0.4)" : "rgba(248, 81, 73, 0.4)"};
+          border: 1px solid ${isRunning ? "rgba(56, 139, 253, 0.25)" : "rgba(248, 81, 73, 0.25)"};
+        }
+        .panel {
+          background: #131314;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          border-radius: 16px;
+          padding: 20px;
+          margin-bottom: 20px;
         }
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 20px;
           font-size: 13px;
         }
         td {
-          padding: 8px 12px;
-          border-bottom: 1px solid #21262d;
+          padding: 10px 14px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+        tr:last-child td {
+          border-bottom: none;
         }
         .label {
-          color: #8b949e;
-          width: 200px;
+          color: #8e918f;
+          width: 220px;
         }
         .value {
-          color: #c9d1d9;
-          font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+          color: #e3e3e3;
+          font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
         }
         .section-title {
-          font-size: 13px;
-          font-weight: 600;
-          color: #8b949e;
-          margin-top: 24px;
-          margin-bottom: 12px;
+          font-size: 12px;
+          font-weight: 500;
+          color: #8e918f;
+          margin-top: 20px;
+          margin-bottom: 10px;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.8px;
         }
         .button-group {
           display: flex;
-          gap: 8px;
+          gap: 10px;
           flex-wrap: wrap;
         }
         .btn {
-          background: #21262d;
-          border: 1px solid #30363d;
-          color: #c9d1d9;
-          padding: 6px 12px;
-          font-size: 12px;
+          background: #1e1f20;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: #e3e3e3;
+          padding: 8px 16px;
+          font-size: 13px;
           font-weight: 500;
-          border-radius: 6px;
+          border-radius: 20px;
           cursor: pointer;
-          transition: background 0.15s, border-color 0.15s;
+          transition: background 0.2s, border-color 0.2s;
         }
         .btn:hover {
-          background: #30363d;
-          border-color: #8b949e;
+          background: #2a2b2d;
+          border-color: rgba(255, 255, 255, 0.15);
         }
         .btn-primary {
-          background: #238636;
-          border-color: #2ea043;
-          color: #ffffff;
+          background: #a8c7fa;
+          border-color: #a8c7fa;
+          color: #062e6f;
         }
         .btn-primary:hover {
-          background: #2ea043;
-          border-color: #3fb950;
+          background: #c2e7ff;
+          border-color: #c2e7ff;
         }
         .btn-danger {
-          background: #da3637;
-          border-color: #f85149;
-          color: #ffffff;
+          background: #ffb4ab;
+          border-color: #ffb4ab;
+          color: #690005;
         }
         .btn-danger:hover {
-          background: #f85149;
-          border-color: #ff7b72;
+          background: #ffdad6;
+          border-color: #ffdad6;
         }
         select {
-          background: #0d1117;
-          border: 1px solid #30363d;
-          color: #c9d1d9;
-          padding: 6px 10px;
-          font-size: 12px;
-          border-radius: 6px;
-          margin-right: 8px;
+          background: #131314;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #e3e3e3;
+          padding: 8px 16px;
+          font-size: 13px;
+          border-radius: 20px;
+          margin-right: 10px;
+          outline: none;
         }
       </style>
     </head>
     <body>
       <div class="header">
-        <h1 class="title">colabd manager</h1>
-        <span class="badge">${isRunning ? "daemon active" : "daemon offline"}</span>
+        <h1 class="title">colabd connection</h1>
+        <span class="badge">${isRunning ? "active" : "offline"}</span>
       </div>
 
-      <table>
-        <tbody>
-          <tr>
-            <td class="label">Daemon Server</td>
-            <td class="value">localhost:${daemonPort}</td>
-          </tr>
-          <tr>
-            <td class="label">Workspace Link</td>
-            <td class="value">${activeLink} (${activeLinkPath})</td>
-          </tr>
-          <tr>
-            <td class="label">Colab Instance</td>
-            <td class="value">${endpoint}</td>
-          </tr>
-          <tr>
-            <td class="label">Compute Rate</td>
-            <td class="value">${rateText}</td>
-          </tr>
-          <tr>
-            <td class="label">Usage Budget Left</td>
-            <td class="value">${usageLeftText}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="panel">
+        <table>
+          <tbody>
+            <tr>
+              <td class="label">daemon endpoint</td>
+              <td class="value">localhost:${daemonPort}</td>
+            </tr>
+            <tr>
+              <td class="label">workspace status</td>
+              <td class="value">${activeLink} (${activeLinkPath})</td>
+            </tr>
+            <tr>
+              <td class="label">active session</td>
+              <td class="value">${endpoint}</td>
+            </tr>
+            <tr>
+              <td class="label">consumption rate</td>
+              <td class="value">${rateText}</td>
+            </tr>
+            <tr>
+              <td class="label">quota remaining</td>
+              <td class="value">${usageLeftText}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-      <div class="section-title">Control Actions</div>
-      <div class="button-group">
+      <div class="section-title">server control</div>
+      <div class="button-group" style="margin-bottom: 20px;">
         ${isRunning ? 
-          `<button class="btn btn-danger" onclick="sendCommand('stopDaemon')">Stop Daemon</button>` : 
-          `<button class="btn btn-primary" onclick="sendCommand('startDaemon')">Start Daemon</button>`
+          `<button class="btn btn-danger" onclick="sendCommand('stopDaemon')">Stop Server</button>` : 
+          `<button class="btn btn-primary" onclick="sendCommand('startDaemon')">Start Server</button>`
         }
-        <button class="btn" onclick="sendCommand('linkWorkspace')" ${!isRunning ? "disabled" : ""}>Link Directory...</button>
+        <button class="btn" onclick="sendCommand('linkWorkspace')" ${!isRunning ? "disabled" : ""}>Link Folder...</button>
       </div>
 
       ${isRunning ? `
-        <div class="section-title">Session Provisioning</div>
-        <div class="button-group">
+        <div class="section-title">session allocation</div>
+        <div class="button-group" style="margin-bottom: 20px;">
           ${isConnected ? 
             `<button class="btn btn-danger" onclick="sendCommand('teardownSession')">Terminate Session</button>` :
             `
@@ -319,7 +396,7 @@ function getWebviewContent(status) {
       ` : ""}
 
       ${isConnected ? `
-        <div class="section-title">Sync & Terminals</div>
+        <div class="section-title">development tools</div>
         <div class="button-group">
           <button class="btn btn-primary" onclick="sendCommand('forceSync')">Sync Now</button>
           <button class="btn" onclick="sendCommand('openTerminal')">Open Terminal</button>
