@@ -56,6 +56,16 @@
         "icon": "$(trash)"
       },
       {
+        "command": "colab-sync.provisionSession",
+        "title": "Provision GPU Session",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "colab-sync.forceSync",
+        "title": "Force Sync",
+        "icon": "$(sync)"
+      },
+      {
         "command": "colab-sync.refreshView",
         "title": "Refresh",
         "icon": "$(refresh)"
