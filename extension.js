@@ -36,7 +36,7 @@ class ColabSyncProvider {
 
     try {
       status = await new Promise((resolve, reject) => {
-        const req = http.get(`${daemonUrl}/v1/status`, { timeout: 1000 }, (res) => {
+        const req = http.get(`${daemonUrl}/v1/status`, { timeout: 1500 }, (res) => {
           let body = "";
           res.on("data", (chunk) => body += chunk);
           res.on("end", () => {
@@ -489,7 +489,6 @@ function getWebviewContent(status) {
           filter: brightness(1.1);
         }
         
-        /* Rotating click animation dots spinner */
         .spinner {
           display: none;
           width: 12px;
@@ -806,7 +805,7 @@ function activate(context) {
     let status = null;
     try {
       status = await new Promise((resolve, reject) => {
-        const req = http.get(`${daemonUrl}/v1/status`, { timeout: 800 }, (res) => {
+        const req = http.get(`${daemonUrl}/v1/status`, { timeout: 1500 }, (res) => {
           let body = "";
           res.on("data", (chunk) => body += chunk);
           res.on("end", () => {
@@ -949,7 +948,7 @@ function activate(context) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("colab-sync.stopDaemon", () => {
-      exec("lsof -t -i :8291", (err, stdout) => {
+      exec("lsof -t -i tcp:8291 -s tcp:listen", (err, stdout) => {
         if (stdout) {
           const pids = stdout.trim().split("\n");
           for (const pid of pids) {
