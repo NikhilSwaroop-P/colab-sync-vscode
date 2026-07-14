@@ -36,7 +36,7 @@ class ColabSyncProvider {
 
     try {
       status = await new Promise((resolve, reject) => {
-        const req = http.get(`${daemonUrl}/v1/status`, { timeout: 1500 }, (res) => {
+        const req = http.get(`${daemonUrl}/v1/status`, { timeout: 1000 }, (res) => {
           let body = "";
           res.on("data", (chunk) => body += chunk);
           res.on("end", () => {
@@ -180,32 +180,7 @@ class ColabSyncProvider {
   }
 }
 
-function getWebviewContent(status) {
-  const isRunning = !!status;
-  const isConnected = status && status.connected;
-  const endpoint = (status && status.connected) ? (status.endpoint || "CPU Runtime") : "None";
-  const activeLink = status && status.activeLink ? status.activeLink.name : "Unlinked";
-  const activeLinkPath = status && status.activeLink ? status.activeLink.path : "None";
-
-  let usageLeftText = "N/A";
-  let rateText = "N/A";
-
-  if (status && status.ccuConsumption) {
-    const ccu = status.ccuConsumption;
-    const rate = ccu.consumptionRateHourly || 0.08;
-    rateText = `${rate.toFixed(3)} CU/hour`;
-    
-    if (ccu.paidComputeUnitsBalance > 0) {
-      const balance = ccu.paidComputeUnitsBalance;
-      const hoursLeft = (balance / rate).toFixed(2);
-      usageLeftText = `${balance.toFixed(2)} CU (~${hoursLeft}h left)`;
-    } else if (ccu.freeCcuQuotaInfo?.remainingTokens) {
-      const tokens = parseInt(ccu.freeCcuQuotaInfo.remainingTokens, 10);
-      const hoursLeft = ((tokens / 1000) / rate).toFixed(2);
-      usageLeftText = `${tokens} Tokens (~${hoursLeft}h left)`;
-    }
-  }
-
+function getWebviewBaseContent() {
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -228,10 +203,8 @@ function getWebviewContent(status) {
           --label-color: #8e918f;
           --btn-bg: #1e1f20;
           --btn-hover: #2a2b2d;
-          --btn-primary: #a8c7fa;
-          --btn-primary-text: #062e6f;
-          --btn-danger: #ffb4ab;
-          --btn-danger-text: #690005;
+          --btn-primary-border: #a8c7fa;
+          --btn-danger-border: #ffb4ab;
           --border-radius: 16px;
           --btn-radius: 20px;
           --card-padding: 20px;
@@ -249,7 +222,6 @@ function getWebviewContent(status) {
           position: relative;
         }
 
-        /* 1. minimal (gemini) auras */
         .glow-bg {
           position: fixed;
           top: 0;
@@ -260,7 +232,7 @@ function getWebviewContent(status) {
           pointer-events: none;
           overflow: hidden;
           background: #000000;
-          display: none;
+          display: block;
         }
         .blob {
           position: absolute;
@@ -296,7 +268,6 @@ function getWebviewContent(status) {
           100% { transform: translate(40px, 30px) scale(1.2); }
         }
 
-        /* 2. space tech stars */
         .stars-bg {
           position: fixed;
           top: 0;
@@ -320,7 +291,6 @@ function getWebviewContent(status) {
           50% { opacity: 1; transform: scale(1.2); }
         }
 
-        /* 3. cyberpunk scanlines */
         .cyberpunk-bg {
           position: fixed;
           top: 0;
@@ -473,20 +443,14 @@ function getWebviewContent(status) {
           border-color: rgba(255, 255, 255, 0.12);
         }
         .btn-primary {
-          background: var(--btn-primary);
-          border-color: var(--btn-primary);
-          color: var(--btn-primary-text);
-        }
-        .btn-primary:hover {
-          filter: brightness(1.1);
+          background: var(--btn-bg);
+          border-color: var(--btn-primary-border);
+          color: var(--text-color);
         }
         .btn-danger {
-          background: var(--btn-danger);
-          border-color: var(--btn-danger);
-          color: var(--btn-danger-text);
-        }
-        .btn-danger:hover {
-          filter: brightness(1.1);
+          background: var(--btn-bg);
+          border-color: var(--btn-danger-border);
+          color: var(--text-color);
         }
         
         .spinner {
@@ -539,12 +503,10 @@ function getWebviewContent(status) {
           --border-color: transparent;
           --text-color: #00f0ff;
           --label-color: #00f0ff;
-          --btn-bg: transparent;
+          --btn-bg: #0d0c1d;
           --btn-hover: rgba(255, 0, 255, 0.1);
-          --btn-primary: #00f0ff;
-          --btn-primary-text: #0d0c1d;
-          --btn-danger: transparent;
-          --btn-danger-text: #ff00ff;
+          --btn-primary-border: #00f0ff;
+          --btn-danger-border: #ff00ff;
           --border-radius: 12px;
           --btn-radius: 8px;
           --card-padding: 2px;
@@ -581,11 +543,11 @@ function getWebviewContent(status) {
           font-family: inherit;
           font-size: 13px;
           font-weight: 500;
+          background: #0d0c1d;
         }
         body.theme-cyberpunk .btn-primary {
-          background: #00f0ff;
           border: 1px solid #00f0ff;
-          color: #0d0c1d;
+          color: #00f0ff;
           box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
         }
         body.theme-cyberpunk .btn-danger {
@@ -621,17 +583,22 @@ function getWebviewContent(status) {
           --label-color: #8fa0b5;
           --btn-bg: #1a2238;
           --btn-hover: #263554;
-          --btn-primary: #38bdf8;
-          --btn-primary-text: #0f172a;
-          --btn-danger: #f87171;
-          --btn-danger-text: #450a0a;
+          --btn-primary-border: #38bdf8;
+          --btn-danger-border: #f87171;
           --border-radius: 12px;
           --btn-radius: 8px;
+        }
+        body.theme-space .btn-primary {
+          border-color: #38bdf8;
+          color: #38bdf8;
+        }
+        body.theme-space .btn-danger {
+          border-color: #f87171;
+          color: #f87171;
         }
       </style>
     </head>
     <body>
-      <!-- backgrounds -->
       <div id="geminiBg" class="glow-bg">
         <div class="blob blob-blue"></div>
         <div class="blob blob-purple"></div>
@@ -647,7 +614,7 @@ function getWebviewContent(status) {
             <div class="header">
               <h1 class="title">colabd connection</h1>
               <div class="header-actions">
-                <span class="badge ${isRunning ? "active" : ""}">offline</span>
+                <span id="headerBadge" class="badge">offline</span>
                 <button class="settings-btn" onclick="toggleSettings()">⚙</button>
               </div>
             </div>
@@ -670,23 +637,23 @@ function getWebviewContent(status) {
                   <tbody>
                     <tr>
                       <td class="label">daemon endpoint</td>
-                      <td class="value">localhost:${daemonPort}</td>
+                      <td id="cellEndpoint" class="value">localhost:${daemonPort}</td>
                     </tr>
                     <tr>
                       <td class="label">workspace status</td>
-                      <td class="value">${activeLink} (${activeLinkPath})</td>
+                      <td id="cellWorkspace" class="value">-</td>
                     </tr>
                     <tr>
                       <td class="label">active session</td>
-                      <td class="value">${endpoint}</td>
+                      <td id="cellSession" class="value">-</td>
                     </tr>
                     <tr>
                       <td class="label">consumption rate</td>
-                      <td class="value">${rateText}</td>
+                      <td id="cellRate" class="value">-</td>
                     </tr>
                     <tr>
                       <td class="label">quota remaining</td>
-                      <td class="value">${usageLeftText}</td>
+                      <td id="cellQuota" class="value">-</td>
                     </tr>
                   </tbody>
                 </table>
@@ -694,40 +661,24 @@ function getWebviewContent(status) {
             </div>
 
             <div class="section-title">server control</div>
-            <div class="button-group" style="margin-bottom: 20px;">
-              ${isRunning ? 
-                `<button class="btn btn-danger" onclick="triggerCommand(this, 'stopDaemon')"><div class="spinner"></div>Stop Server</button>` : 
-                `<button class="btn btn-primary" onclick="triggerCommand(this, 'startDaemon')"><div class="spinner"></div>Start Server</button>`
-              }
-              <button class="btn" onclick="triggerCommand(this, 'linkWorkspace')" ${!isRunning ? "disabled" : ""}><div class="spinner"></div>Link Folder...</button>
+            <div id="btnGroupServer" class="button-group" style="margin-bottom: 20px;">
+              <!-- Dynamic server buttons -->
             </div>
 
-            ${isRunning ? `
+            <div id="sessionAllocationSection" style="display: none;">
               <div class="section-title">session allocation</div>
-              <div class="button-group" style="margin-bottom: 20px;">
-                ${isConnected ? 
-                  `<button class="btn btn-danger" onclick="triggerCommand(this, 'teardownSession')"><div class="spinner"></div>Terminate Session</button>` :
-                  `
-                    <select id="hardwareSelect">
-                      <option value="Standard CPU">Standard CPU (Free/Paid Standard)</option>
-                      <option value="T4 GPU">T4 GPU (Free/Paid Standard)</option>
-                      <option value="L4 GPU">L4 GPU (Paid Premium)</option>
-                      <option value="A100 GPU">A100 GPU (Paid Premium)</option>
-                      <option value="TPU">TPU (Paid Premium)</option>
-                    </select>
-                    <button class="btn btn-primary" onclick="provision(this)"><div class="spinner"></div>Claim Session</button>
-                  `
-                }
+              <div id="btnGroupSession" class="button-group" style="margin-bottom: 20px;">
+                <!-- Dynamic session buttons -->
               </div>
-            ` : ""}
+            </div>
 
-            ${isConnected ? `
+            <div id="devToolsSection" style="display: none;">
               <div class="section-title">development tools</div>
               <div class="button-group">
                 <button class="btn btn-primary" onclick="triggerCommand(this, 'forceSync')"><div class="spinner"></div>Sync Now</button>
                 <button class="btn" onclick="triggerCommand(this, 'openTerminal')"><div class="spinner"></div>Open Terminal</button>
               </div>
-            ` : ""}
+            </div>
           </div>
         </div>
       </div>
@@ -767,7 +718,6 @@ function getWebviewContent(status) {
           vscode.setState({ theme: theme });
         }
 
-        // Starfield generator
         function generateStars() {
           const container = document.getElementById("spaceBg");
           container.innerHTML = "";
@@ -782,6 +732,100 @@ function getWebviewContent(status) {
             container.appendChild(star);
           }
         }
+
+        function updateUI(status) {
+          const isRunning = !!status;
+          const isConnected = status && status.connected;
+          
+          const badge = document.getElementById("headerBadge");
+          if (isRunning) {
+            badge.innerText = "active";
+            badge.classList.add("active");
+          } else {
+            badge.innerText = "offline";
+            badge.classList.remove("active");
+          }
+
+          document.getElementById("cellWorkspace").innerText = status && status.activeLink ? 
+            (status.activeLink.name + " (" + status.activeLink.path + ")") : "Unlinked (None)";
+
+          document.getElementById("cellSession").innerText = (status && status.connected) ? 
+            (status.endpoint || "CPU Runtime") : "None";
+
+          let usageLeftText = "N/A";
+          let rateText = "N/A";
+
+          if (status && status.ccuConsumption) {
+            const ccu = status.ccuConsumption;
+            const rate = ccu.consumptionRateHourly || 0.08;
+            rateText = rate.toFixed(3) + " CU/hour";
+            
+            if (ccu.paidComputeUnitsBalance > 0) {
+              const balance = ccu.paidComputeUnitsBalance;
+              const hoursLeft = (balance / rate).toFixed(2);
+              usageLeftText = balance.toFixed(2) + " CU (~" + hoursLeft + "h left)";
+            } else if (ccu.freeCcuQuotaInfo?.remainingTokens) {
+              const tokens = parseInt(ccu.freeCcuQuotaInfo.remainingTokens, 10);
+              const hoursLeft = ((tokens / 1000) / rate).toFixed(2);
+              usageLeftText = tokens + " Tokens (~" + hoursLeft + "h left)";
+            }
+          }
+          document.getElementById("cellRate").innerText = rateText;
+          document.getElementById("cellQuota").innerText = usageLeftText;
+
+          // Buttons Server control
+          const serverGroup = document.getElementById("btnGroupServer");
+          if (isRunning) {
+            serverGroup.innerHTML = \`
+              <button class="btn btn-danger" onclick="triggerCommand(this, 'stopDaemon')"><div class="spinner"></div>Stop Server</button>
+              <button class="btn" onclick="triggerCommand(this, 'linkWorkspace')"><div class="spinner"></div>Link Folder...</button>
+            \`;
+          } else {
+            serverGroup.innerHTML = \`
+              <button class="btn btn-primary" onclick="triggerCommand(this, 'startDaemon')"><div class="spinner"></div>Start Server</button>
+            \`;
+          }
+
+          // Session control
+          const sessionSection = document.getElementById("sessionAllocationSection");
+          const sessionGroup = document.getElementById("btnGroupSession");
+          if (isRunning) {
+            sessionSection.style.display = "block";
+            if (isConnected) {
+              sessionGroup.innerHTML = \`
+                <button class="btn btn-danger" onclick="triggerCommand(this, 'teardownSession')"><div class="spinner"></div>Terminate Session</button>
+              \`;
+            } else {
+              sessionGroup.innerHTML = \`
+                <select id="hardwareSelect">
+                  <option value="Standard CPU">Standard CPU (Free/Paid Standard)</option>
+                  <option value="T4 GPU">T4 GPU (Free/Paid Standard)</option>
+                  <option value="L4 GPU">L4 GPU (Paid Premium)</option>
+                  <option value="A100 GPU">A100 GPU (Paid Premium)</option>
+                  <option value="TPU">TPU (Paid Premium)</option>
+                </select>
+                <button class="btn btn-primary" onclick="provision(this)"><div class="spinner"></div>Claim Session</button>
+              \`;
+            }
+          } else {
+            sessionSection.style.display = "none";
+          }
+
+          // Dev tools
+          const devTools = document.getElementById("devToolsSection");
+          if (isConnected) {
+            devTools.style.display = "block";
+          } else {
+            devTools.style.display = "none";
+          }
+        }
+
+        window.addEventListener('message', event => {
+          const message = event.data;
+          if (message.type === 'updateStatus') {
+            updateUI(message.status);
+          }
+        });
 
         // Initialize state
         const state = vscode.getState() || { theme: "minimal" };
@@ -800,31 +844,32 @@ function activate(context) {
 
   let activeWebview = null;
 
-  async function updateWebview() {
-    if (!activeWebview) return;
-    let status = null;
-    try {
-      status = await new Promise((resolve, reject) => {
-        const req = http.get(`${daemonUrl}/v1/status`, { timeout: 1500 }, (res) => {
-          let body = "";
-          res.on("data", (chunk) => body += chunk);
-          res.on("end", () => {
-            if (res.statusCode === 200) resolve(JSON.parse(body));
-            else resolve(null);
-          });
-        });
-        req.on("error", () => resolve(null));
-        req.on("timeout", () => {
-          req.destroy();
-          resolve(null);
+  async function getDaemonStatus() {
+    return new Promise((resolve) => {
+      const req = http.get(`${daemonUrl}/v1/status`, { timeout: 800 }, (res) => {
+        let body = "";
+        res.on("data", (chunk) => body += chunk);
+        res.on("end", () => {
+          if (res.statusCode === 200) resolve(JSON.parse(body));
+          else resolve(null);
         });
       });
-    } catch {}
-    activeWebview.webview.html = getWebviewContent(status);
+      req.on("error", () => resolve(null));
+      req.on("timeout", () => {
+        req.destroy();
+        resolve(null);
+      });
+    });
+  }
+
+  async function updateWebview() {
+    if (!activeWebview) return;
+    const status = await getDaemonStatus();
+    activeWebview.webview.postMessage({ type: 'updateStatus', status });
   }
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("colab-sync.openDashboard", () => {
+    vscode.commands.registerCommand("colab-sync.openDashboard", async () => {
       if (activeWebview) {
         activeWebview.reveal(vscode.ViewColumn.One);
         return;
@@ -859,7 +904,9 @@ function activate(context) {
         }
       }, null, context.subscriptions);
 
-      updateWebview();
+      activeWebview.webview.html = getWebviewBaseContent();
+      const status = await getDaemonStatus();
+      activeWebview.webview.postMessage({ type: 'updateStatus', status });
     })
   );
 
@@ -895,7 +942,6 @@ function activate(context) {
           });
           const data = await res.json();
           if (data.connected) {
-            const ep = data.endpoint || "Standard CPU";
             vscode.window.showInformationMessage("Successfully connected to remote session.");
           } else {
             vscode.window.showErrorMessage(`Provisioning failed: ${data.message || "Unknown error"}`);
