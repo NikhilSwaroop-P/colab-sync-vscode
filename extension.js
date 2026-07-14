@@ -668,6 +668,43 @@ function getWebviewBaseContent() {
               </div>
             </div>
 
+            <div id="resourceMetricsSection" style="display: none; margin-bottom: 20px;">
+              <div class="section-title">resource utilization</div>
+              <div class="panel">
+                <div class="panel-inner" style="display: flex; flex-direction: column; gap: 14px;">
+                  <div>
+                    <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                      <span>System RAM</span>
+                      <span id="txtRam">0 GB / 0 GB (0%)</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05); height:6px; border-radius:3px; overflow:hidden;">
+                      <div id="barRam" style="background:#58a6ff; width:0%; height:100%; transition:width 0.4s;"></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                      <span>Disk Space</span>
+                      <span id="txtDisk">0 GB / 0 GB (0%)</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05); height:6px; border-radius:3px; overflow:hidden;">
+                      <div id="barDisk" style="background:#34d399; width:0%; height:100%; transition:width 0.4s;"></div>
+                    </div>
+                  </div>
+
+                  <div id="gpuUsageContainer" style="display: none;">
+                    <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+                      <span id="txtGpuName">GPU VRAM</span>
+                      <span id="txtGpu">0 GB / 0 GB (0%)</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.05); height:6px; border-radius:3px; overflow:hidden;">
+                      <div id="barGpu" style="background:#a78bfa; width:0%; height:100%; transition:width 0.4s;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="section-title">server control</div>
             <div id="btnGroupServer" class="button-group" style="margin-bottom: 20px;">
               <!-- Dynamic server buttons -->
@@ -696,7 +733,6 @@ function getWebviewBaseContent() {
         const vscode = acquireVsCodeApi();
         let lastStatus = null;
         
-        // Disable loading spinners on terminal spawn clicks since they return instantly
         function triggerCommand(btn, cmd) {
           if (cmd === 'openTerminal' || cmd === 'openExternalTerminal') {
             vscode.postMessage({ command: cmd });
@@ -801,6 +837,40 @@ function getWebviewBaseContent() {
           } else {
             document.getElementById("cellOutgoing").innerText = "0 files";
             document.getElementById("cellIncoming").innerText = "0 files";
+          }
+
+          // Resource Utilization
+          const resSec = document.getElementById("resourceMetricsSection");
+          if (status && status.resources) {
+            resSec.style.display = "block";
+            // RAM
+            const ramUsage = status.resources.ram.usage / (1024 * 1024 * 1024);
+            const ramTotal = status.resources.ram.total / (1024 * 1024 * 1024);
+            const ramPct = Math.round(ramUsage / ramTotal * 100);
+            document.getElementById("txtRam").innerText = ramUsage.toFixed(1) + " GB / " + ramTotal.toFixed(1) + " GB (" + ramPct + "%)";
+            document.getElementById("barRam").style.width = ramPct + "%";
+            // Disk
+            const diskUsage = status.resources.disk.usage / (1024 * 1024 * 1024);
+            const diskTotal = status.resources.disk.total / (1024 * 1024 * 1024);
+            const diskPct = Math.round(diskUsage / diskTotal * 100);
+            document.getElementById("txtDisk").innerText = diskUsage.toFixed(1) + " GB / " + diskTotal.toFixed(1) + " GB (" + diskPct + "%)";
+            document.getElementById("barDisk").style.width = diskPct + "%";
+            // GPU
+            const gpuContainer = document.getElementById("gpuUsageContainer");
+            if (status.resources.gpu && status.resources.gpu.length > 0) {
+              gpuContainer.style.display = "block";
+              const gpu = status.resources.gpu[0];
+              const gpuUsage = gpu.usage / (1024 * 1024 * 1024);
+              const gpuTotal = gpu.total / (1024 * 1024 * 1024);
+              const gpuPct = Math.round(gpuUsage / gpuTotal * 100);
+              document.getElementById("txtGpuName").innerText = "GPU VRAM (" + gpu.name + ")";
+              document.getElementById("txtGpu").innerText = gpuUsage.toFixed(1) + " GB / " + gpuTotal.toFixed(1) + " GB (" + gpuPct + "%)";
+              document.getElementById("barGpu").style.width = gpuPct + "%";
+            } else {
+              gpuContainer.style.display = "none";
+            }
+          } else {
+            resSec.style.display = "none";
           }
 
           // Buttons Server control
