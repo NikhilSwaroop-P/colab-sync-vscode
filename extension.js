@@ -228,6 +228,7 @@ function getWebviewContent(status) {
           --btn-danger-text: #690005;
           --border-radius: 16px;
           --btn-radius: 20px;
+          --card-padding: 20px;
         }
 
         body {
@@ -323,22 +324,8 @@ function getWebviewContent(status) {
           z-index: 1;
           pointer-events: none;
           overflow: hidden;
-          background: #0a0710;
+          background: #0b0914;
           display: none;
-        }
-        .scanline {
-          width: 100%;
-          height: 100%;
-          background: linear-gradient(
-            rgba(18, 16, 16, 0) 50%,
-            rgba(0, 240, 255, 0.08) 50%
-          ), linear-gradient(
-            90deg,
-            rgba(255, 0, 0, 0.03),
-            rgba(0, 255, 0, 0.01),
-            rgba(0, 0, 255, 0.03)
-          );
-          background-size: 100% 4px, 6px 100%;
         }
 
         .content {
@@ -366,11 +353,12 @@ function getWebviewContent(status) {
           align-items: center;
           font-size: 11px;
           font-weight: 500;
-          padding: 4px 10px;
+          padding: 4px 12px;
           border-radius: 20px;
           background: rgba(255, 179, 0, 0.1);
           color: #ffb300;
           border: 1px solid rgba(255, 179, 0, 0.25);
+          transition: all 0.2s;
         }
         
         .badge.active {
@@ -403,13 +391,21 @@ function getWebviewContent(status) {
           display: none;
         }
 
+        .outer-wrapper {
+          border-radius: var(--border-radius);
+          padding: var(--card-padding);
+          background: var(--panel-bg);
+          border: 1px solid var(--border-color);
+          box-sizing: border-box;
+        }
+
         .panel {
           background: var(--panel-bg);
           border: 1px solid var(--border-color);
           border-radius: var(--border-radius);
-          padding: 16px;
+          padding: 12px;
           margin-bottom: 20px;
-          backdrop-filter: blur(10px);
+          box-sizing: border-box;
         }
 
         table {
@@ -420,7 +416,7 @@ function getWebviewContent(status) {
         }
         td {
           padding: 12px 14px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+          border-bottom: 1px solid var(--border-color);
           word-wrap: break-word;
           overflow-wrap: break-word;
         }
@@ -449,6 +445,7 @@ function getWebviewContent(status) {
           display: flex;
           gap: 10px;
           flex-wrap: wrap;
+          margin-top: 10px;
         }
         .btn {
           background: var(--btn-bg);
@@ -460,6 +457,8 @@ function getWebviewContent(status) {
           border-radius: var(--btn-radius);
           cursor: pointer;
           transition: all 0.2s;
+          display: inline-flex;
+          align-items: center;
         }
         .btn:hover {
           background: var(--btn-hover);
@@ -481,40 +480,101 @@ function getWebviewContent(status) {
         .btn-danger:hover {
           filter: brightness(1.1);
         }
+        
+        /* Model Selector Capsule Dropdown styling */
         select {
-          background: var(--panel-bg);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: var(--text-color);
-          padding: 8px 16px;
+          background: #1e1f20;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: #e3e3e3;
+          padding: 8px 36px 8px 16px;
           font-size: 13px;
-          border-radius: var(--btn-radius);
+          border-radius: 20px;
           margin-right: 10px;
           outline: none;
+          cursor: pointer;
+          appearance: none;
+          background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2724%27%20height%3D%2724%27%20viewBox%3D%270%200%2024%2024%27%20fill%3D%27none%27%20stroke%3D%27%238e918f%27%20stroke-width%3D%272%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27%3E%3Cpolyline%20points%3D%276%209%2012%2015%2018%209%27%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E");
+          background-repeat: no-repeat;
+          background-position: right 12px center;
+          background-size: 14px;
+        }
+        select:hover {
+          background-color: #2a2b2d;
+          border-color: rgba(255, 255, 255, 0.15);
         }
 
         /* theme specifics */
         body.theme-cyberpunk {
-          --bg-color: #0a0710;
-          --panel-bg: #100b1d;
-          --border-color: #00f0ff;
+          --bg-color: #0d0c1d;
+          --panel-bg: #0d0c1d;
+          --border-color: transparent;
           --text-color: #00f0ff;
-          --label-color: #ff007f;
-          --btn-bg: #1c1433;
-          --btn-hover: #ff007f;
+          --label-color: #00f0ff;
+          --btn-bg: transparent;
+          --btn-hover: rgba(255, 0, 255, 0.1);
           --btn-primary: #00f0ff;
-          --btn-primary-text: #0a0710;
-          --btn-danger: #ff007f;
-          --btn-danger-text: #ffffff;
-          --border-radius: 4px;
-          --btn-radius: 4px;
+          --btn-primary-text: #0d0c1d;
+          --btn-danger: transparent;
+          --btn-danger-text: #ff00ff;
+          --border-radius: 12px;
+          --btn-radius: 8px;
+          --card-padding: 2px; /* border thickness helper */
         }
+        
+        body.theme-cyberpunk .outer-wrapper {
+          background-image: linear-gradient(135deg, #00f0ff, #ff00ff);
+          padding: 2px; /* acts as border */
+        }
+        body.theme-cyberpunk .inner-wrapper {
+          background: #0d0c1d;
+          border-radius: 10px;
+          padding: 20px;
+        }
+
         body.theme-cyberpunk .panel {
-          box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+          background-image: linear-gradient(135deg, #00f0ff, #ff00ff);
+          padding: 2px; /* acts as border */
         }
+        body.theme-cyberpunk .panel-inner {
+          background: #0d0c1d;
+          border-radius: 10px;
+          padding: 12px;
+        }
+
         body.theme-cyberpunk .btn {
-          text-transform: uppercase;
-          font-family: monospace;
-          box-shadow: 0 0 5px rgba(255, 0, 127, 0.2);
+          font-family: inherit;
+          font-size: 13px;
+          font-weight: 500;
+        }
+        body.theme-cyberpunk .btn-primary {
+          background: #00f0ff;
+          border: 1px solid #00f0ff;
+          color: #0d0c1d;
+          box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+        }
+        body.theme-cyberpunk .btn-danger {
+          border: 1px solid #ff00ff;
+          color: #ff00ff;
+          box-shadow: 0 0 8px rgba(255, 0, 255, 0.4);
+        }
+        body.theme-cyberpunk select {
+          background-color: #0d0c1d;
+          border: 1px solid #00f0ff;
+          color: #00f0ff;
+          border-radius: 8px;
+        }
+
+        body.theme-cyberpunk .badge {
+          background: rgba(255, 179, 0, 0.1);
+          color: #ffb300;
+          border: 1px solid #ffb300;
+          box-shadow: 0 0 8px rgba(255, 179, 0, 0.3);
+        }
+        body.theme-cyberpunk .badge.active {
+          background: rgba(0, 240, 255, 0.1);
+          color: #00f0ff;
+          border: 1px solid #00f0ff;
+          box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
         }
 
         body.theme-space {
@@ -543,93 +603,97 @@ function getWebviewContent(status) {
 
       <div id="spaceBg" class="stars-bg"></div>
 
-      <div id="cyberpunkBg" class="cyberpunk-bg">
-        <div class="scanline"></div>
-      </div>
+      <div id="cyberpunkBg" class="cyberpunk-bg"></div>
 
       <div class="content">
-        <div class="header">
-          <h1 class="title">colabd connection</h1>
-          <div class="header-actions">
-            <span class="badge ${isRunning ? "active" : ""}">offline</span>
-            <button class="settings-btn" onclick="toggleSettings()">⚙</button>
-          </div>
-        </div>
+        <div class="outer-wrapper">
+          <div class="inner-wrapper">
+            <div class="header">
+              <h1 class="title">colabd connection</h1>
+              <div class="header-actions">
+                <span class="badge ${isRunning ? "active" : ""}">offline</span>
+                <button class="settings-btn" onclick="toggleSettings()">⚙</button>
+              </div>
+            </div>
 
-        <div id="settingsPanel" class="settings-panel">
-          <div class="section-title" style="margin-top: 0;">UI Customization</div>
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span>Theme Theme</span>
-            <select id="themeSelect" onchange="changeTheme(this.value)">
-              <option value="minimal">Minimal (Gemini)</option>
-              <option value="space">Deep Space Tech</option>
-              <option value="cyberpunk">Neo-Retro Cyberpunk</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="panel">
-          <table>
-            <tbody>
-              <tr>
-                <td class="label">daemon endpoint</td>
-                <td class="value">localhost:${daemonPort}</td>
-              </tr>
-              <tr>
-                <td class="label">workspace status</td>
-                <td class="value">${activeLink} (${activeLinkPath})</td>
-              </tr>
-              <tr>
-                <td class="label">active session</td>
-                <td class="value">${endpoint}</td>
-              </tr>
-              <tr>
-                <td class="label">consumption rate</td>
-                <td class="value">${rateText}</td>
-              </tr>
-              <tr>
-                <td class="label">quota remaining</td>
-                <td class="value">${usageLeftText}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="section-title">server control</div>
-        <div class="button-group" style="margin-bottom: 20px;">
-          ${isRunning ? 
-            `<button class="btn btn-danger" onclick="sendCommand('stopDaemon')">Stop Server</button>` : 
-            `<button class="btn btn-primary" onclick="sendCommand('startDaemon')">Start Server</button>`
-          }
-          <button class="btn" onclick="sendCommand('linkWorkspace')" ${!isRunning ? "disabled" : ""}>Link Folder...</button>
-        </div>
-
-        ${isRunning ? `
-          <div class="section-title">session allocation</div>
-          <div class="button-group" style="margin-bottom: 20px;">
-            ${isConnected ? 
-              `<button class="btn btn-danger" onclick="sendCommand('teardownSession')">Terminate Session</button>` :
-              `
-                <select id="hardwareSelect">
-                  <option value="Standard CPU">Standard CPU (Free/Paid Standard)</option>
-                  <option value="T4 GPU">T4 GPU (Free/Paid Standard)</option>
-                  <option value="L4 GPU">L4 GPU (Paid Premium)</option>
-                  <option value="A100 GPU">A100 GPU (Paid Premium)</option>
-                  <option value="TPU">TPU (Paid Premium)</option>
+            <div id="settingsPanel" class="settings-panel">
+              <div class="section-title" style="margin-top: 0;">UI Customization</div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span>Select Theme</span>
+                <select id="themeSelect" onchange="changeTheme(this.value)">
+                  <option value="minimal">Minimal (Gemini)</option>
+                  <option value="space">Deep Space Tech</option>
+                  <option value="cyberpunk">Neo-Retro Cyberpunk</option>
                 </select>
-                <button class="btn btn-primary" onclick="provision()">Claim Session</button>
-              `
-            }
-          </div>
-        ` : ""}
+              </div>
+            </div>
 
-        ${isConnected ? `
-          <div class="section-title">development tools</div>
-          <div class="button-group">
-            <button class="btn btn-primary" onclick="sendCommand('forceSync')">Sync Now</button>
-            <button class="btn" onclick="sendCommand('openTerminal')">Open Terminal</button>
+            <div class="panel">
+              <div class="panel-inner">
+                <table>
+                  <tbody>
+                    <tr>
+                      <td class="label">daemon endpoint</td>
+                      <td class="value">localhost:${daemonPort}</td>
+                    </tr>
+                    <tr>
+                      <td class="label">workspace status</td>
+                      <td class="value">${activeLink} (${activeLinkPath})</td>
+                    </tr>
+                    <tr>
+                      <td class="label">active session</td>
+                      <td class="value">${endpoint}</td>
+                    </tr>
+                    <tr>
+                      <td class="label">consumption rate</td>
+                      <td class="value">${rateText}</td>
+                    </tr>
+                    <tr>
+                      <td class="label">quota remaining</td>
+                      <td class="value">${usageLeftText}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="section-title">server control</div>
+            <div class="button-group" style="margin-bottom: 20px;">
+              ${isRunning ? 
+                `<button class="btn btn-danger" onclick="sendCommand('stopDaemon')">Stop Server</button>` : 
+                `<button class="btn btn-primary" onclick="sendCommand('startDaemon')">Start Server</button>`
+              }
+              <button class="btn" onclick="sendCommand('linkWorkspace')" ${!isRunning ? "disabled" : ""}>Link Folder...</button>
+            </div>
+
+            ${isRunning ? `
+              <div class="section-title">session allocation</div>
+              <div class="button-group" style="margin-bottom: 20px;">
+                ${isConnected ? 
+                  `<button class="btn btn-danger" onclick="sendCommand('teardownSession')">Terminate Session</button>` :
+                  `
+                    <select id="hardwareSelect">
+                      <option value="Standard CPU">Standard CPU (Free/Paid Standard)</option>
+                      <option value="T4 GPU">T4 GPU (Free/Paid Standard)</option>
+                      <option value="L4 GPU">L4 GPU (Paid Premium)</option>
+                      <option value="A100 GPU">A100 GPU (Paid Premium)</option>
+                      <option value="TPU">TPU (Paid Premium)</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="provision()">Claim Session</button>
+                  `
+                }
+              </div>
+            ` : ""}
+
+            ${isConnected ? `
+              <div class="section-title">development tools</div>
+              <div class="button-group">
+                <button class="btn btn-primary" onclick="sendCommand('forceSync')">Sync Now</button>
+                <button class="btn" onclick="sendCommand('openTerminal')">Open Terminal</button>
+              </div>
+            ` : ""}
           </div>
-        ` : ""}
+        </div>
       </div>
 
       <script>
@@ -976,7 +1040,7 @@ function activate(context) {
           const data = await res.json();
           if (data.connected) {
             const ep = data.endpoint || "Standard CPU";
-            vscode.window.showInformationMessage("Successfully connected to remote session.");
+            vscode.window.showInformationMessage(`Successfully connected to remote ${ep}`);
           } else {
             vscode.window.showErrorMessage(`Provisioning failed: ${data.message || "Unknown error"}`);
           }
