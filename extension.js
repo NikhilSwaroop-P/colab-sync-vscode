@@ -220,14 +220,14 @@ function getWebviewContent(status) {
           color: #e3e3e3;
           margin: 0;
           padding: 24px;
-          height: 100vh;
+          min-height: 100vh;
           box-sizing: border-box;
-          overflow: hidden;
+          overflow-y: auto;
           position: relative;
         }
         
         .glow-bg {
-          position: absolute;
+          position: fixed;
           top: 0;
           left: 0;
           right: 0;
@@ -241,44 +241,46 @@ function getWebviewContent(status) {
         .blob {
           position: absolute;
           border-radius: 50%;
-          filter: blur(100px);
-          opacity: 0.12;
+          filter: blur(80px);
+          opacity: 0.3;
           mix-blend-mode: screen;
         }
 
         .blob-blue {
-          width: 350px;
-          height: 350px;
-          background: #4285f4;
+          width: 300px;
+          height: 300px;
+          background: radial-gradient(circle, rgba(66, 133, 244, 0.8) 0%, rgba(66, 133, 244, 0) 70%);
           bottom: -50px;
           left: 20%;
-          animation: floatBlue 25s ease-in-out infinite alternate;
+          animation: floatBlue 15s ease-in-out infinite alternate;
         }
 
         .blob-purple {
-          width: 300px;
-          height: 300px;
-          background: #a855f7;
+          width: 250px;
+          height: 250px;
+          background: radial-gradient(circle, rgba(168, 85, 247, 0.8) 0%, rgba(168, 85, 247, 0) 70%);
           bottom: -80px;
           right: 25%;
-          animation: floatPurple 20s ease-in-out infinite alternate;
+          animation: floatPurple 12s ease-in-out infinite alternate;
         }
 
         @keyframes floatBlue {
           0% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(50px, -30px) scale(1.1); }
-          100% { transform: translate(-30px, 15px) scale(0.9); }
+          50% { transform: translate(60px, -40px) scale(1.2); }
+          100% { transform: translate(-20px, 20px) scale(0.95); }
         }
 
         @keyframes floatPurple {
           0% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(-40px, -50px) scale(0.9); }
-          100% { transform: translate(30px, 20px) scale(1.15); }
+          50% { transform: translate(-50px, -60px) scale(0.9); }
+          100% { transform: translate(40px, 30px) scale(1.2); }
         }
 
         .content {
           position: relative;
           z-index: 2;
+          max-width: 800px;
+          margin: 0 auto;
         }
 
         .header {
@@ -316,17 +318,20 @@ function getWebviewContent(status) {
           width: 100%;
           border-collapse: collapse;
           font-size: 13px;
+          table-layout: fixed;
         }
         td {
           padding: 10px 14px;
           border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+          word-wrap: break-word;
+          overflow-wrap: break-word;
         }
         tr:last-child td {
           border-bottom: none;
         }
         .label {
           color: #8e918f;
-          width: 220px;
+          width: 180px;
         }
         .value {
           color: #e3e3e3;
@@ -435,7 +440,7 @@ function getWebviewContent(status) {
           ${isRunning ? 
             `<button class="btn btn-danger" onclick="sendCommand('stopDaemon')">Stop Server</button>` : 
             `<button class="btn btn-primary" onclick="sendCommand('startDaemon')">Start Server</button>`
-          }
+        }
           <button class="btn" onclick="sendCommand('linkWorkspace')" ${!isRunning ? "disabled" : ""}>Link Folder...</button>
         </div>
 
