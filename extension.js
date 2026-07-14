@@ -843,27 +843,35 @@ function getWebviewBaseContent() {
           const resSec = document.getElementById("resourceMetricsSection");
           if (status && status.resources) {
             resSec.style.display = "block";
+            
             // RAM
-            const ramUsage = status.resources.ram.usage / (1024 * 1024 * 1024);
-            const ramTotal = status.resources.ram.total / (1024 * 1024 * 1024);
+            const ramTotal = (status.resources.memory?.totalBytes || 1) / (1024 * 1024 * 1024);
+            const ramFree = (status.resources.memory?.freeBytes || 0) / (1024 * 1024 * 1024);
+            const ramUsage = ramTotal - ramFree;
             const ramPct = Math.round(ramUsage / ramTotal * 100);
             document.getElementById("txtRam").innerText = ramUsage.toFixed(1) + " GB / " + ramTotal.toFixed(1) + " GB (" + ramPct + "%)";
             document.getElementById("barRam").style.width = ramPct + "%";
+            
             // Disk
-            const diskUsage = status.resources.disk.usage / (1024 * 1024 * 1024);
-            const diskTotal = status.resources.disk.total / (1024 * 1024 * 1024);
-            const diskPct = Math.round(diskUsage / diskTotal * 100);
-            document.getElementById("txtDisk").innerText = diskUsage.toFixed(1) + " GB / " + diskTotal.toFixed(1) + " GB (" + diskPct + "%)";
-            document.getElementById("barDisk").style.width = diskPct + "%";
+            if (status.resources.disks && status.resources.disks.length > 0) {
+              const disk = status.resources.disks[0].filesystem;
+              const diskUsage = disk.usedBytes / (1024 * 1024 * 1024);
+              const diskTotal = disk.totalBytes / (1024 * 1024 * 1024);
+              const diskPct = Math.round(diskUsage / diskTotal * 100);
+              document.getElementById("txtDisk").innerText = diskUsage.toFixed(1) + " GB / " + diskTotal.toFixed(1) + " GB (" + diskPct + "%)";
+              document.getElementById("barDisk").style.width = diskPct + "%";
+            }
+            
             // GPU
             const gpuContainer = document.getElementById("gpuUsageContainer");
-            if (status.resources.gpu && status.resources.gpu.length > 0) {
+            if (status.resources.gpus && status.resources.gpus.length > 0) {
               gpuContainer.style.display = "block";
-              const gpu = status.resources.gpu[0];
-              const gpuUsage = gpu.usage / (1024 * 1024 * 1024);
-              const gpuTotal = gpu.total / (1024 * 1024 * 1024);
+              const gpu = status.resources.gpus[0];
+              const gpuTotal = (gpu.memory?.totalBytes || 1) / (1024 * 1024 * 1024);
+              const gpuFree = (gpu.memory?.freeBytes || 0) / (1024 * 1024 * 1024);
+              const gpuUsage = gpu.memory?.usedBytes !== undefined ? (gpu.memory.usedBytes / (1024 * 1024 * 1024)) : (gpuTotal - gpuFree);
               const gpuPct = Math.round(gpuUsage / gpuTotal * 100);
-              document.getElementById("txtGpuName").innerText = "GPU VRAM (" + gpu.name + ")";
+              document.getElementById("txtGpuName").innerText = "GPU VRAM (" + (gpu.name || "Tesla T4") + ")";
               document.getElementById("txtGpu").innerText = gpuUsage.toFixed(1) + " GB / " + gpuTotal.toFixed(1) + " GB (" + gpuPct + "%)";
               document.getElementById("barGpu").style.width = gpuPct + "%";
             } else {
