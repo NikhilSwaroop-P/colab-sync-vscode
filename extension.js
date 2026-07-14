@@ -120,20 +120,26 @@ class ColabSyncProvider {
 function getWebviewContent(status) {
   const isRunning = !!status;
   const isConnected = status && status.connected;
-  const endpoint = status ? status.endpoint || "CPU Runtime" : "None";
+  const endpoint = status ? status.endpoint || "CPU Runtime" : "Offline";
   const activeLink = status && status.activeLink ? status.activeLink.name : "Unlinked";
   const activeLinkPath = status && status.activeLink ? status.activeLink.path : "None";
 
-  let quotaSummary = "No active quota info";
+  let usageLeftText = "N/A";
+  let rateText = "N/A";
+
   if (status && status.ccuConsumption) {
     const ccu = status.ccuConsumption;
     const rate = ccu.consumptionRateHourly || 0.08;
+    rateText = `${rate.toFixed(3)} CU/hour`;
+    
     if (ccu.paidComputeUnitsBalance > 0) {
-      quotaSummary = `${ccu.paidComputeUnitsBalance.toFixed(1)} CU remaining (~${(ccu.paidComputeUnitsBalance / rate).toFixed(1)} hours)`;
+      const balance = ccu.paidComputeUnitsBalance;
+      const hoursLeft = (balance / rate).toFixed(2);
+      usageLeftText = `${balance.toFixed(2)} CU (~${hoursLeft} hours left)`;
     } else if (ccu.freeCcuQuotaInfo?.remainingTokens) {
       const tokens = parseInt(ccu.freeCcuQuotaInfo.remainingTokens, 10);
-      const mins = Math.floor(((tokens / 1000) / rate * 60) / 10) * 10;
-      quotaSummary = `Free Tier: ${Math.floor(mins / 60)}h ${mins % 60}m left`;
+      const hoursLeft = ((tokens / 1000) / rate).toFixed(2);
+      usageLeftText = `${tokens} Tokens (~${hoursLeft} hours left)`;
     }
   }
 
@@ -146,109 +152,83 @@ function getWebviewContent(status) {
       <title>Colab Sync Control Center</title>
       <style>
         body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          background: #0f141c;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          background: #0d1117;
           color: #c9d1d9;
           margin: 0;
-          padding: 24px;
+          padding: 20px;
         }
         .header {
           display: flex;
-          justify-content: space-between;
           align-items: center;
+          justify-content: space-between;
           border-bottom: 1px solid #21262d;
-          padding-bottom: 16px;
-          margin-bottom: 24px;
+          padding-bottom: 12px;
+          margin-bottom: 20px;
         }
         .title {
-          font-size: 24px;
-          font-weight: 600;
-          color: #58a6ff;
-          margin: 0;
-        }
-        .status-pulse {
-          display: flex;
-          align-items: center;
-          font-size: 13px;
-          font-weight: 500;
-          color: ${isRunning ? "#3fb950" : "#f85149"};
-        }
-        .pulse-dot {
-          width: 10px;
-          height: 10px;
-          background-color: ${isRunning ? "#3fb950" : "#f85149"};
-          border-radius: 50%;
-          margin-right: 8px;
-          box-shadow: 0 0 8px ${isRunning ? "#3fb950" : "#f85149"};
-          animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-          0% { transform: scale(0.95); opacity: 0.5; }
-          50% { transform: scale(1.1); opacity: 1; }
-          100% { transform: scale(0.95); opacity: 0.5; }
-        }
-        .grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-          gap: 20px;
-          margin-bottom: 24px;
-        }
-        .card {
-          background: #161b22;
-          border: 1px solid #30363d;
-          border-radius: 12px;
-          padding: 20px;
-          transition: transform 0.2s, border-color 0.2s;
-        }
-        .card:hover {
-          border-color: #58a6ff;
-          transform: translateY(-2px);
-        }
-        .card-title {
           font-size: 16px;
           font-weight: 600;
-          margin-top: 0;
-          margin-bottom: 12px;
           color: #f0f6fc;
-          display: flex;
-          align-items: center;
-          gap: 8px;
+          margin: 0;
         }
-        .card-row {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 8px;
-          font-size: 14px;
-        }
-        .card-label {
-          color: #8b949e;
-        }
-        .card-value {
-          color: #f0f6fc;
-          font-weight: 500;
-        }
-        .btn {
+        .badge {
           display: inline-flex;
           align-items: center;
-          justify-content: center;
+          font-size: 11px;
+          font-weight: 500;
+          padding: 3px 8px;
+          border-radius: 2em;
+          background: ${isRunning ? "rgba(56, 139, 253, 0.15)" : "rgba(248, 81, 73, 0.15)"};
+          color: ${isRunning ? "#58a6ff" : "#ff7b72"};
+          border: 1px solid ${isRunning ? "rgba(56, 139, 253, 0.4)" : "rgba(248, 81, 73, 0.4)"};
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 20px;
+          font-size: 13px;
+        }
+        td {
+          padding: 8px 12px;
+          border-bottom: 1px solid #21262d;
+        }
+        .label {
+          color: #8b949e;
+          width: 200px;
+        }
+        .value {
+          color: #c9d1d9;
+          font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+        }
+        .section-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: #8b949e;
+          margin-top: 24px;
+          margin-bottom: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .button-group {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .btn {
           background: #21262d;
           border: 1px solid #30363d;
           color: #c9d1d9;
-          padding: 10px 16px;
-          font-size: 14px;
+          padding: 6px 12px;
+          font-size: 12px;
           font-weight: 500;
           border-radius: 6px;
           cursor: pointer;
-          transition: background 0.2s, border-color 0.2s, color 0.2s;
-          text-decoration: none;
-          margin-top: 12px;
-          width: 100%;
-          box-sizing: border-box;
+          transition: background 0.15s, border-color 0.15s;
         }
         .btn:hover {
           background: #30363d;
           border-color: #8b949e;
-          color: #f0f6fc;
         }
         .btn-primary {
           background: #238636;
@@ -258,7 +238,6 @@ function getWebviewContent(status) {
         .btn-primary:hover {
           background: #2ea043;
           border-color: #3fb950;
-          color: #ffffff;
         }
         .btn-danger {
           background: #da3637;
@@ -268,95 +247,82 @@ function getWebviewContent(status) {
         .btn-danger:hover {
           background: #f85149;
           border-color: #ff7b72;
-          color: #ffffff;
         }
         select {
-          width: 100%;
-          padding: 8px;
-          background: #0f141c;
+          background: #0d1117;
           border: 1px solid #30363d;
           color: #c9d1d9;
+          padding: 6px 10px;
+          font-size: 12px;
           border-radius: 6px;
-          margin-top: 8px;
+          margin-right: 8px;
         }
       </style>
     </head>
     <body>
       <div class="header">
-        <h1 class="title">Colab Sync Control Center</h1>
-        <div class="status-pulse">
-          <div class="pulse-dot"></div>
-          <span>${isRunning ? "Daemon Connected" : "Daemon Offline"}</span>
-        </div>
+        <h1 class="title">colabd manager</h1>
+        <span class="badge">${isRunning ? "daemon active" : "daemon offline"}</span>
       </div>
 
-      <div class="grid">
-        <div class="card">
-          <h2 class="card-title">Daemon Server</h2>
-          <div class="card-row">
-            <span class="card-label">Server Port</span>
-            <span class="card-value">${daemonPort}</span>
-          </div>
-          <div class="card-row">
-            <span class="card-label">Status</span>
-            <span class="card-value">${isRunning ? "Running" : "Stopped"}</span>
-          </div>
-          ${isRunning ? 
-            `<button class="btn btn-danger" onclick="sendCommand('stopDaemon')">Stop Daemon Server</button>` : 
-            `<button class="btn btn-primary" onclick="sendCommand('startDaemon')">Start Daemon Server</button>`
-          }
-        </div>
+      <table>
+        <tbody>
+          <tr>
+            <td class="label">Daemon Server</td>
+            <td class="value">localhost:${daemonPort}</td>
+          </tr>
+          <tr>
+            <td class="label">Workspace Link</td>
+            <td class="value">${activeLink} (${activeLinkPath})</td>
+          </tr>
+          <tr>
+            <td class="label">Colab Instance</td>
+            <td class="value">${endpoint}</td>
+          </tr>
+          <tr>
+            <td class="label">Compute Rate</td>
+            <td class="value">${rateText}</td>
+          </tr>
+          <tr>
+            <td class="label">Usage Budget Left</td>
+            <td class="value">${usageLeftText}</td>
+          </tr>
+        </tbody>
+      </table>
 
-        <div class="card">
-          <h2 class="card-title">Linked Workspace</h2>
-          <div class="card-row">
-            <span class="card-label">Link Name</span>
-            <span class="card-value">${activeLink}</span>
-          </div>
-          <div class="card-row">
-            <span class="card-label">Local Path</span>
-            <span class="card-value" style="font-size:12px; word-break:break-all;">${activeLinkPath}</span>
-          </div>
-          <button class="btn" onclick="sendCommand('linkWorkspace')" ${!isRunning ? "disabled" : ""}>Change Linked Folder...</button>
-        </div>
+      <div class="section-title">Control Actions</div>
+      <div class="button-group">
+        ${isRunning ? 
+          `<button class="btn btn-danger" onclick="sendCommand('stopDaemon')">Stop Daemon</button>` : 
+          `<button class="btn btn-primary" onclick="sendCommand('startDaemon')">Start Daemon</button>`
+        }
+        <button class="btn" onclick="sendCommand('linkWorkspace')" ${!isRunning ? "disabled" : ""}>Link Directory...</button>
+      </div>
 
-        <div class="card">
-          <h2 class="card-title">Colab Session</h2>
-          <div class="card-row">
-            <span class="card-label">Hardware</span>
-            <span class="card-value">${endpoint}</span>
-          </div>
-          <div class="card-row">
-            <span class="card-label">Quota Info</span>
-            <span class="card-value">${quotaSummary}</span>
-          </div>
+      ${isRunning ? `
+        <div class="section-title">Session Provisioning</div>
+        <div class="button-group">
           ${isConnected ? 
-            `<button class="btn btn-danger" onclick="sendCommand('teardownSession')">Disconnect Session</button>` :
+            `<button class="btn btn-danger" onclick="sendCommand('teardownSession')">Terminate Session</button>` :
             `
-              <div>
-                <select id="hardwareSelect">
-                  <option value="Standard CPU">Standard CPU (Free/Paid Standard)</option>
-                  <option value="T4 GPU">T4 GPU (Free/Paid Standard)</option>
-                  <option value="L4 GPU">L4 GPU (Paid Premium)</option>
-                  <option value="A100 GPU">A100 GPU (Paid Premium)</option>
-                  <option value="TPU">TPU (Paid Premium)</option>
-                </select>
-                <button class="btn btn-primary" onclick="provision()">Claim Active Session</button>
-              </div>
+              <select id="hardwareSelect">
+                <option value="Standard CPU">Standard CPU (Free/Paid Standard)</option>
+                <option value="T4 GPU">T4 GPU (Free/Paid Standard)</option>
+                <option value="L4 GPU">L4 GPU (Paid Premium)</option>
+                <option value="A100 GPU">A100 GPU (Paid Premium)</option>
+                <option value="TPU">TPU (Paid Premium)</option>
+              </select>
+              <button class="btn btn-primary" onclick="provision()">Claim Session</button>
             `
           }
         </div>
-      </div>
+      ` : ""}
 
       ${isConnected ? `
-        <div class="grid" style="grid-template-columns: 1fr;">
-          <div class="card">
-            <h2 class="card-title" style="color:#58a6ff;">Development Tools</h2>
-            <div style="display:flex; gap:16px; flex-wrap:wrap;">
-              <button class="btn btn-primary" style="flex:1; min-width:200px;" onclick="sendCommand('forceSync')">Run Sync Sync</button>
-              <button class="btn" style="flex:1; min-width:200px;" onclick="sendCommand('openTerminal')">Launch Interactive Terminal</button>
-            </div>
-          </div>
+        <div class="section-title">Sync & Terminals</div>
+        <div class="button-group">
+          <button class="btn btn-primary" onclick="sendCommand('forceSync')">Sync Now</button>
+          <button class="btn" onclick="sendCommand('openTerminal')">Open Terminal</button>
         </div>
       ` : ""}
 
@@ -477,7 +443,7 @@ function activate(context) {
           const data = await res.json();
           if (data.connected) {
             const ep = data.endpoint || "Standard CPU";
-            vscode.window.showInformationMessage(`Successfully connected to remote ${ep}`);
+            vscode.window.showInformationMessage("Successfully connected to remote session.");
           } else {
             vscode.window.showErrorMessage(`Provisioning failed: ${data.message || "Unknown error"}`);
           }
