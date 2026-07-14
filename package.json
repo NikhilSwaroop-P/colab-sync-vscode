@@ -1,0 +1,101 @@
+{
+  "name": "colab-sync-vscode",
+  "displayName": "Colab Sync Control",
+  "description": "Control panel for the colabd daemon and interactive GPU terminal launcher.",
+  "version": "0.1.0",
+  "publisher": "crimson-blitz",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "colab-sync-sidebar",
+          "title": "Colab Sync",
+          "icon": "$(sync)"
+        }
+      ]
+    },
+    "views": {
+      "colab-sync-sidebar": [
+        {
+          "id": "colabSyncControl",
+          "name": "Control Panel"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "colab-sync.startDaemon",
+        "title": "Start Daemon",
+        "icon": "$(play)"
+      },
+      {
+        "command": "colab-sync.stopDaemon",
+        "title": "Stop Daemon",
+        "icon": "$(terminate)"
+      },
+      {
+        "command": "colab-sync.linkWorkspace",
+        "title": "Link Workspace",
+        "icon": "$(link)"
+      },
+      {
+        "command": "colab-sync.openTerminal",
+        "title": "Open Colab Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "colab-sync.teardownSession",
+        "title": "Kill Session",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "colab-sync.refreshView",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "colab-sync.refreshView",
+          "when": "view == colabSyncControl",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "colab-sync.startDaemon",
+          "when": "view == colabSyncControl && viewItem == daemon-stopped",
+          "group": "inline"
+        },
+        {
+          "command": "colab-sync.stopDaemon",
+          "when": "view == colabSyncControl && viewItem == daemon-running",
+          "group": "inline"
+        },
+        {
+          "command": "colab-sync.linkWorkspace",
+          "when": "view == colabSyncControl && viewItem == link-unlinked",
+          "group": "inline"
+        },
+        {
+          "command": "colab-sync.openTerminal",
+          "when": "view == colabSyncControl && viewItem == session-item",
+          "group": "inline"
+        },
+        {
+          "command": "colab-sync.teardownSession",
+          "when": "view == colabSyncControl && viewItem == session-item",
+          "group": "inline"
+        }
+      ]
+    }
+  }
+}
