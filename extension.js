@@ -11,9 +11,11 @@ class ColabSyncProvider {
   constructor() {
     this._onDidChangeTreeData = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+    this.latestStatus = null;
   }
 
-  refresh() {
+  refresh(status) {
+    this.latestStatus = status;
     this._onDidChangeTreeData.fire();
   }
 
@@ -23,37 +25,54 @@ class ColabSyncProvider {
 
   async getChildren(element) {
     if (element) {
-      if (element.contextValue === "session-item" && element.quota) {
-        return [
-          new vscode.TreeItem(element.quota, vscode.TreeItemCollapsibleState.None)
-        ];
+      if (element.contextValue === "session-item") {
+        const subItems = [];
+        if (element.quota) {
+          const quotaItem = new vscode.TreeItem(element.quota, vscode.TreeItemCollapsibleState.None);
+          quotaItem.iconPath = new vscode.ThemeIcon("key");
+          subItems.push(quotaItem);
+        }
+        
+        const status = this.latestStatus;
+        if (status && status.resources) {
+          if (status.resources.memory) {
+            const ramTotal = (status.resources.memory.totalBytes || 1) / (1024 * 1024 * 1024);
+            const ramFree = (status.resources.memory.freeBytes || 0) / (1024 * 1024 * 1024);
+            const ramUsage = ramTotal - ramFree;
+            const ramPct = Math.round(ramUsage / ramTotal * 100);
+            const ramItem = new vscode.TreeItem(`RAM: ${ramUsage.toFixed(1)}G / ${ramTotal.toFixed(1)}G (${ramPct}%)`, vscode.TreeItemCollapsibleState.None);
+            ramItem.iconPath = new vscode.ThemeIcon("dashboard");
+            subItems.push(ramItem);
+          }
+
+          if (status.resources.disks && status.resources.disks.length > 0) {
+            const disk = status.resources.disks[0].filesystem;
+            const diskUsage = disk.usedBytes / (1024 * 1024 * 1024);
+            const diskTotal = disk.totalBytes / (1024 * 1024 * 1024);
+            const diskPct = Math.round(diskUsage / diskTotal * 100);
+            const diskItem = new vscode.TreeItem(`Disk: ${diskUsage.toFixed(1)}G / ${diskTotal.toFixed(1)}G (${diskPct}%)`, vscode.TreeItemCollapsibleState.None);
+            diskItem.iconPath = new vscode.ThemeIcon("database");
+            subItems.push(diskItem);
+          }
+
+          if (status.resources.gpus && status.resources.gpus.length > 0) {
+            const gpu = status.resources.gpus[0];
+            const gpuTotal = (gpu.memory?.totalBytes || 1) / (1024 * 1024 * 1024);
+            const gpuFree = (gpu.memory?.freeBytes || 0) / (1024 * 1024 * 1024);
+            const gpuUsage = gpu.memory?.usedBytes !== undefined ? (gpu.memory.usedBytes / (1024 * 1024 * 1024)) : (gpuTotal - gpuFree);
+            const gpuPct = Math.round(gpuUsage / gpuTotal * 100);
+            const gpuItem = new vscode.TreeItem(`GPU: ${gpuUsage.toFixed(1)}G / ${gpuTotal.toFixed(1)}G (${gpuPct}%)`, vscode.TreeItemCollapsibleState.None);
+            gpuItem.iconPath = new vscode.ThemeIcon("chip");
+            subItems.push(gpuItem);
+          }
+        }
+        return subItems;
       }
       return [];
     }
 
     const items = [];
-    let status = null;
-
-    try {
-      status = await new Promise((resolve, reject) => {
-        const req = http.get(`${daemonUrl}/v1/status`, { timeout: 3000 }, (res) => {
-          let body = "";
-          res.on("data", (chunk) => body += chunk);
-          res.on("end", () => {
-            if (res.statusCode === 200) {
-              resolve(JSON.parse(body));
-            } else {
-              reject(new Error("status error"));
-            }
-          });
-        });
-        req.on("error", reject);
-        req.on("timeout", () => {
-          req.destroy();
-          reject(new Error("timeout"));
-        });
-      });
-    } catch {}
+    const status = this.latestStatus;
 
     const uiBtn = new vscode.TreeItem("Open Web UI Dashboard", vscode.TreeItemCollapsibleState.None);
     uiBtn.iconPath = new vscode.ThemeIcon("dashboard");
@@ -624,7 +643,7 @@ function getWebviewBaseContent() {
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span>Select Theme</span>
                 <select id="themeSelect" onchange="changeTheme(this.value)">
-                  <option value="minimal">Minimal (Gemini)</option>
+                  <option value="minimal">Minimal</option>
                   <option value="space">Deep Space Tech</option>
                   <option value="cyberpunk">Neo-Retro Cyberpunk</option>
                 </select>
@@ -998,27 +1017,37 @@ function activate(context) {
   async function updateWebview() {
     const status = await getDaemonStatus();
     if (status) {
+      let ramText = "";
+      if (status.resources && status.resources.memory) {
+        const ramTotal = (status.resources.memory.totalBytes || 1) / (1024 * 1024 * 1024);
+        const ramFree = (status.resources.memory.freeBytes || 0) / (1024 * 1024 * 1024);
+        const ramUsage = ramTotal - ramFree;
+        ramText = ` | RAM: ${ramUsage.toFixed(1)}/${ramTotal.toFixed(0)}G`;
+      }
+
       if (status.connected && status.syncLevel) {
         const outG = status.syncLevel.outgoing || 0;
         const inG = status.syncLevel.incoming || 0;
         if (status.syncLevel.conflicts > 0) {
-          statusBarItem.text = `$(alert) Colab Sync: ${status.syncLevel.conflicts} conflicts!`;
+          statusBarItem.text = `$(alert) Colab: ${status.syncLevel.conflicts} conflicts!${ramText}`;
           statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
         } else {
-          statusBarItem.text = `$(sync) Colab: ↑${outG} ↓${inG}`;
+          statusBarItem.text = `$(sync) Colab: ↑${outG} ↓${inG}${ramText}`;
           statusBarItem.backgroundColor = undefined;
         }
       } else if (status.connected) {
-        statusBarItem.text = "$(sync) Colab: Connected";
+        statusBarItem.text = `$(sync) Colab: Connected${ramText}`;
         statusBarItem.backgroundColor = undefined;
       } else {
-        statusBarItem.text = "$(sync) Colab: Linked (No Session)";
+        statusBarItem.text = `$(sync) Colab: Linked (No Session)${ramText}`;
         statusBarItem.backgroundColor = undefined;
       }
     } else {
       statusBarItem.text = "$(sync) Colab: Stopped";
       statusBarItem.backgroundColor = undefined;
     }
+
+    provider.refresh(status);
 
     if (activeWebview) {
       activeWebview.webview.postMessage({ type: 'updateStatus', status });
@@ -1107,7 +1136,7 @@ function activate(context) {
         } catch (err) {
           vscode.window.showErrorMessage(`Network error calling daemon: ${err.message}`);
         }
-        provider.refresh();
+        provider.refresh(data);
         updateWebview();
       });
     })
@@ -1115,7 +1144,6 @@ function activate(context) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("colab-sync.refreshView", () => {
-      provider.refresh();
       updateWebview();
     })
   );
@@ -1141,7 +1169,6 @@ function activate(context) {
           });
           child.unref();
           setTimeout(() => {
-            provider.refresh();
             updateWebview();
             resolve();
           }, 1500);
@@ -1162,7 +1189,6 @@ function activate(context) {
           }
         }
         setTimeout(() => {
-          provider.refresh();
           updateWebview();
         }, 1000);
       });
@@ -1238,7 +1264,6 @@ function activate(context) {
         } else {
           vscode.window.showInformationMessage("Workspace successfully linked.");
         }
-        provider.refresh();
         updateWebview();
       });
     })
@@ -1296,7 +1321,7 @@ function activate(context) {
         } catch (err) {
           vscode.window.showErrorMessage(`Network error calling daemon: ${err.message}`);
         }
-        provider.refresh();
+        provider.refresh(data);
         updateWebview();
       });
     })
@@ -1316,7 +1341,6 @@ function activate(context) {
         } catch (err) {
           vscode.window.showErrorMessage(`Sync failed: ${err.message}`);
         }
-        provider.refresh();
         updateWebview();
       });
     })
@@ -1337,7 +1361,6 @@ function activate(context) {
                 res.on("data", () => {});
                 res.on("end", () => {
                   vscode.window.showInformationMessage("Colab session terminated.");
-                  provider.refresh();
                   updateWebview();
                 });
               });
@@ -1390,7 +1413,6 @@ function activate(context) {
   );
 
   const interval = setInterval(() => {
-    provider.refresh();
     updateWebview();
   }, 10000);
 
