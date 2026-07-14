@@ -57,9 +57,8 @@ class ColabSyncProvider {
 
           if (status.resources.gpus && status.resources.gpus.length > 0) {
             const gpu = status.resources.gpus[0];
-            const gpuTotal = (gpu.memory?.totalBytes || 1) / (1024 * 1024 * 1024);
-            const gpuFree = (gpu.memory?.freeBytes || 0) / (1024 * 1024 * 1024);
-            const gpuUsage = gpu.memory?.usedBytes !== undefined ? (gpu.memory.usedBytes / (1024 * 1024 * 1024)) : (gpuTotal - gpuFree);
+            const gpuTotal = (gpu.memoryTotalBytes || 1) / (1024 * 1024 * 1024);
+            const gpuUsage = (gpu.memoryUsedBytes || 0) / (1024 * 1024 * 1024);
             const gpuPct = Math.round(gpuUsage / gpuTotal * 100);
             const gpuItem = new vscode.TreeItem(`GPU: ${gpuUsage.toFixed(1)}G / ${gpuTotal.toFixed(1)}G (${gpuPct}%)`, vscode.TreeItemCollapsibleState.None);
             gpuItem.iconPath = new vscode.ThemeIcon("chip");
@@ -886,9 +885,8 @@ function getWebviewBaseContent() {
             if (status.resources.gpus && status.resources.gpus.length > 0) {
               gpuContainer.style.display = "block";
               const gpu = status.resources.gpus[0];
-              const gpuTotal = (gpu.memory?.totalBytes || 1) / (1024 * 1024 * 1024);
-              const gpuFree = (gpu.memory?.freeBytes || 0) / (1024 * 1024 * 1024);
-              const gpuUsage = gpu.memory?.usedBytes !== undefined ? (gpu.memory.usedBytes / (1024 * 1024 * 1024)) : (gpuTotal - gpuFree);
+              const gpuTotal = (gpu.memoryTotalBytes || 1) / (1024 * 1024 * 1024);
+              const gpuUsage = (gpu.memoryUsedBytes || 0) / (1024 * 1024 * 1024);
               const gpuPct = Math.round(gpuUsage / gpuTotal * 100);
               document.getElementById("txtGpuName").innerText = "GPU VRAM (" + (gpu.name || "Tesla T4") + ")";
               document.getElementById("txtGpu").innerText = gpuUsage.toFixed(1) + " GB / " + gpuTotal.toFixed(1) + " GB (" + gpuPct + "%)";
@@ -1033,9 +1031,8 @@ function activate(context) {
         }
         if (status.resources.gpus && status.resources.gpus.length > 0) {
           const gpu = status.resources.gpus[0];
-          const gpuTotal = (gpu.memory?.totalBytes || 1) / (1024 * 1024 * 1024);
-          const gpuFree = (gpu.memory?.freeBytes || 0) / (1024 * 1024 * 1024);
-          const gpuUsage = gpu.memory?.usedBytes !== undefined ? (gpu.memory.usedBytes / (1024 * 1024 * 1024)) : (gpuTotal - gpuFree);
+          const gpuTotal = (gpu.memoryTotalBytes || 1) / (1024 * 1024 * 1024);
+          const gpuUsage = (gpu.memoryUsedBytes || 0) / (1024 * 1024 * 1024);
           metricsText += ` | VRAM: ${gpuUsage.toFixed(1)}/${gpuTotal.toFixed(0)}G`;
         }
       }
@@ -1427,7 +1424,6 @@ function activate(context) {
     })
   );
 
-  // Run update immediately on activation to resolve initial display gaps
   updateWebview();
 
   const interval = setInterval(() => {
