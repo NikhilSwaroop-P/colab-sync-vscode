@@ -10,6 +10,19 @@ Colab Sync Control is a professional VS Code extension that provides a visual da
 - **Compute Unit Quota Tracker**: View hourly consumption rates and remaining free/paid compute units balance in real time.
 - **Vibrant Custom Themes**: Choose between curated minimal design systems, deep space tech backdrops, or animated Neo-Retro Cyberpunk themes.
 
+## Installation
+
+### 1. VS Code Marketplace (Recommended)
+You can download and install the extension directly from the VS Code Marketplace:
+[Download from VS Code Marketplace]()
+
+### 2. Manual VSIX Installation
+For local development or manual deployment:
+1. Download the `colab-sync-vscode-0.1.0.vsix` release file.
+2. Open VS Code, open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`), and run:
+   **Extensions: Install from VSIX...**
+3. Select the downloaded `.vsix` file to complete the installation.
+
 ## Getting Started
 
 ### 1. Prerequisites
