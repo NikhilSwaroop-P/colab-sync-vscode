@@ -123,6 +123,7 @@ class ColabSyncProvider {
       } else {
         const noSessionItem = new vscode.TreeItem("No active Colab sessions", vscode.TreeItemCollapsibleState.None);
         noSessionItem.iconPath = new vscode.ThemeIcon("circle-slash");
+        noSessionItem.quota = "Not connected";
         items.push(noSessionItem);
       }
 
@@ -632,6 +633,7 @@ function getWebviewBaseContent() {
             <div class="header">
               <h1 class="title">colabd connection</h1>
               <div class="header-actions">
+                <button class="settings-btn" onclick="triggerCommand(this, 'refreshView')" title="Refresh Dashboard Status">⟳</button>
                 <span id="headerBadge" class="badge">offline</span>
                 <button class="settings-btn" onclick="toggleSettings()">⚙</button>
               </div>
@@ -752,8 +754,13 @@ function getWebviewBaseContent() {
         let lastStatus = null;
         
         function triggerCommand(btn, cmd) {
-          if (cmd === 'openTerminal' || cmd === 'openExternalTerminal') {
+          if (cmd === 'openTerminal' || cmd === 'openExternalTerminal' || cmd === 'refreshView') {
             vscode.postMessage({ command: cmd });
+            if (cmd === 'refreshView') {
+              btn.style.transform = 'rotate(360deg)';
+              btn.style.transition = 'transform 0.4s ease';
+              setTimeout(() => { btn.style.transform = 'none'; btn.style.transition = 'none'; }, 400);
+            }
             return;
           }
           btn.classList.add("loading");
@@ -766,6 +773,8 @@ function getWebviewBaseContent() {
         function provision(btn) {
           btn.classList.add("loading");
           const hardware = document.getElementById("hardwareSelect").value;
+          const state = vscode.getState() || { theme: "minimal" };
+          vscode.setState({ ...state, hardware: hardware });
           vscode.postMessage({ command: 'provisionSession', hardware: hardware });
           setTimeout(() => {
             btn.classList.remove("loading");
@@ -784,7 +793,8 @@ function getWebviewBaseContent() {
           document.getElementById("spaceBg").style.display = theme === "space" ? "block" : "none";
           document.getElementById("cyberpunkBg").style.display = theme === "cyberpunk" ? "block" : "none";
           
-          vscode.setState({ theme: theme });
+          const state = vscode.getState() || { theme: "minimal" };
+          vscode.setState({ ...state, theme: theme });
         }
 
         function generateStars() {
@@ -921,13 +931,15 @@ function getWebviewBaseContent() {
                 <button class="btn btn-danger" onclick="triggerCommand(this, 'teardownSession')"><div class="spinner"></div>Terminate Session</button>
               \`;
             } else {
+              const state = vscode.getState() || {};
+              const defaultHw = state.hardware || "Standard CPU";
               sessionGroup.innerHTML = \`
                 <select id="hardwareSelect">
-                  <option value="Standard CPU">Standard CPU (Free/Paid Standard)</option>
-                  <option value="T4 GPU">T4 GPU (Free/Paid Standard)</option>
-                  <option value="L4 GPU">L4 GPU (Paid Premium)</option>
-                  <option value="A100 GPU">A100 GPU (Paid Premium)</option>
-                  <option value="TPU">TPU (Paid Premium)</option>
+                  <option value="Standard CPU" \${defaultHw === "Standard CPU" ? "selected" : ""}>Standard CPU (Free/Paid Standard)</option>
+                  <option value="T4 GPU" \${defaultHw === "T4 GPU" ? "selected" : ""}>T4 GPU (Free/Paid Standard)</option>
+                  <option value="L4 GPU" \${defaultHw === "L4 GPU" ? "selected" : ""}>L4 GPU (Paid Premium)</option>
+                  <option value="A100 GPU" \${defaultHw === "A100 GPU" ? "selected" : ""}>A100 GPU (Paid Premium)</option>
+                  <option value="TPU" \${defaultHw === "TPU" ? "selected" : ""}>TPU (Paid Premium)</option>
                 </select>
                 <button class="btn btn-primary" onclick="provision(this)"><div class="spinner"></div>Claim Session</button>
               \`;
@@ -953,7 +965,7 @@ function getWebviewBaseContent() {
         });
 
         // Initialize state
-        const state = vscode.getState() || { theme: "minimal" };
+        const state = vscode.getState() || { theme: "minimal", hardware: "Standard CPU" };
         changeTheme(state.theme);
         document.getElementById("themeSelect").value = state.theme;
         generateStars();
@@ -1146,6 +1158,8 @@ function activate(context) {
           vscode.commands.executeCommand("colab-sync.openExternalTerminal");
         } else if (message.command === "provisionSession") {
           vscode.commands.executeCommand("colab-sync.provisionSessionFromWebview", message.hardware);
+        } else if (message.command === "refreshView") {
+          vscode.commands.executeCommand("colab-sync.refreshView");
         }
       }, null, context.subscriptions);
 
@@ -1176,6 +1190,70 @@ function activate(context) {
       vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: `Provisioning ${hardware} runtime on Colab...`,
+        cancellable: false
+      }, async () => {
+        try {
+          const res = await fetch(`${daemonUrl}/v1/status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provision: true, variant, accelerator })
+          });
+          const data = await res.json();
+          if (data.connected) {
+            vscode.window.showInformationMessage("Successfully connected to remote session.");
+          } else {
+            vscode.window.showErrorMessage(`Provisioning failed: ${data.message || "Unknown error"}`);
+          }
+        } catch (err) {
+          vscode.window.showErrorMessage(`Network error calling daemon: ${err.message}`);
+        }
+        provider.refresh(data);
+        updateWebview();
+      });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("colab-sync.provisionSession", async () => {
+      const persistedHardware = context.globalState.get("lastProvisionHardware", "Standard CPU (Free/Paid Standard)");
+      
+      const selection = await vscode.window.showQuickPick(
+        [
+          "Standard CPU (Free/Paid Standard)",
+          "T4 GPU (Free/Paid Standard)",
+          "L4 GPU (Paid Premium)",
+          "A100 GPU (Paid Premium)",
+          "TPU (Paid Premium)"
+        ],
+        { 
+          placeHolder: "Select accelerator hardware type to provision",
+          value: persistedHardware
+        }
+      );
+      if (!selection) return;
+
+      context.globalState.update("lastProvisionHardware", selection);
+
+      let accelerator = "";
+      let variant = "DEFAULT";
+
+      if (selection.startsWith("T4")) {
+        variant = "GPU";
+        accelerator = "T4";
+      } else if (selection.startsWith("L4")) {
+        variant = "GPU";
+        accelerator = "L4";
+      } else if (selection.startsWith("A100")) {
+        variant = "GPU";
+        accelerator = "A100";
+      } else if (selection.startsWith("TPU")) {
+        variant = "TPU";
+        accelerator = "TPU";
+      }
+
+      vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Provisioning ${selection} runtime on Colab...`,
         cancellable: false
       }, async () => {
         try {
@@ -1343,64 +1421,6 @@ function activate(context) {
           req.end();
           vscode.window.showInformationMessage("Workspace successfully linked.");
         }
-      });
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand("colab-sync.provisionSession", async () => {
-      const selection = await vscode.window.showQuickPick(
-        [
-          "Standard CPU (Free/Paid Standard)",
-          "T4 GPU (Free/Paid Standard)",
-          "L4 GPU (Paid Premium)",
-          "A100 GPU (Paid Premium)",
-          "TPU (Paid Premium)"
-        ],
-        { placeHolder: "Select accelerator hardware type to provision" }
-      );
-      if (!selection) return;
-
-      let accelerator = "";
-      let variant = "DEFAULT";
-
-      if (selection.startsWith("T4")) {
-        variant = "GPU";
-        accelerator = "T4";
-      } else if (selection.startsWith("L4")) {
-        variant = "GPU";
-        accelerator = "L4";
-      } else if (selection.startsWith("A100")) {
-        variant = "GPU";
-        accelerator = "A100";
-      } else if (selection.startsWith("TPU")) {
-        variant = "TPU";
-        accelerator = "TPU";
-      }
-
-      vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification,
-        title: `Provisioning ${selection} runtime on Colab...`,
-        cancellable: false
-      }, async () => {
-        try {
-          const res = await fetch(`${daemonUrl}/v1/status`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ provision: true, variant, accelerator })
-          });
-          const data = await res.json();
-          if (data.connected) {
-            const ep = data.endpoint || "Standard CPU";
-            vscode.window.showInformationMessage("Successfully connected to remote session.");
-          } else {
-            vscode.window.showErrorMessage(`Provisioning failed: ${data.message || "Unknown error"}`);
-          }
-        } catch (err) {
-          vscode.window.showErrorMessage(`Network error calling daemon: ${err.message}`);
-        }
-        provider.refresh(data);
-        updateWebview();
       });
     })
   );
