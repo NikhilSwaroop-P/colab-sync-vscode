@@ -1273,10 +1273,31 @@ function activate(context) {
       exec(`node /home/crimson/Projects/notebook/colab-sync/src/colabd.js link "${targetFolder}" --name "${linkName}"`, (err) => {
         if (err) {
           vscode.window.showErrorMessage(`Linking failed: ${err.message}`);
+          updateWebview();
         } else {
+          const postData = JSON.stringify({ path: targetFolder, name: linkName });
+          const req = http.request({
+            hostname: "127.0.0.1",
+            port: daemonPort,
+            path: "/v1/link",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Content-Length": Buffer.byteLength(postData)
+            }
+          }, (res) => {
+            res.on("data", () => {});
+            res.on("end", () => {
+              updateWebview();
+            });
+          });
+          req.on("error", () => {
+            updateWebview();
+          });
+          req.write(postData);
+          req.end();
           vscode.window.showInformationMessage("Workspace successfully linked.");
         }
-        updateWebview();
       });
     })
   );
