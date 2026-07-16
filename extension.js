@@ -929,10 +929,10 @@ function getWebviewBaseContent() {
           // Buttons Server control
           const serverGroup = document.getElementById("btnGroupServer");
           if (isRunning) {
-            serverGroup.innerHTML = `
+            serverGroup.innerHTML = \`
               <button class="btn btn-danger" onclick="triggerCommand(this, 'stopDaemon')"><div class="spinner"></div>Stop Server</button>
               <button class="btn" onclick="triggerCommand(this, 'linkWorkspace')"><div class="spinner"></div>Link Folder...</button>
-              \${status.activeLink ? \`<button class="btn btn-danger" onclick="triggerCommand(this, 'unlinkWorkspace')"><div class="spinner"></div>Unlink Folder</button>\` : ''}
+              \${status.activeLink ? '<button class="btn btn-danger" onclick="triggerCommand(this, \\'unlinkWorkspace\\')"><div class="spinner"></div>Unlink Folder</button>' : ''}
             \`;
           } else {
             serverGroup.innerHTML = \`
