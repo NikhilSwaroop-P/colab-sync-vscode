@@ -979,7 +979,7 @@ function activate(context) {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       const currentPath = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : null;
 
-      const listReq = http.get(`${daemonUrl}/v1/link`, { timeout: 2000 }, (listRes) => {
+      const listReq = http.get(`${daemonUrl}/v1/links`, { timeout: 2000 }, (listRes) => {
         let listBody = "";
         listRes.on("data", (chunk) => listBody += chunk);
         listRes.on("end", () => {
