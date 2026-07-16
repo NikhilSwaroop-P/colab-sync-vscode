@@ -4,6 +4,10 @@
   "description": "Control panel for the colabd daemon and interactive GPU terminal launcher.",
   "version": "0.1.0",
   "publisher": "crimson-blitz",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/crimson-blitz/colab-sync-vscode.git"
+  },
   "engines": {
     "vscode": "^1.80.0"
   },
