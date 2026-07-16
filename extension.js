@@ -145,6 +145,16 @@ class ColabSyncProvider {
       };
       items.push(linkBtn);
 
+      if (status.activeLink) {
+        const unlinkBtn = new vscode.TreeItem("Unlink Workspace Folder", vscode.TreeItemCollapsibleState.None);
+        unlinkBtn.iconPath = new vscode.ThemeIcon("link-external");
+        unlinkBtn.command = {
+          command: "colab-sync.unlinkWorkspace",
+          title: "Unlink Workspace"
+        };
+        items.push(unlinkBtn);
+      }
+
       if (!status.connected) {
         const provisionBtn = new vscode.TreeItem("Provision Active Session...", vscode.TreeItemCollapsibleState.None);
         provisionBtn.iconPath = new vscode.ThemeIcon("cloud-upload");
@@ -372,9 +382,16 @@ function getWebviewBaseContent() {
           align-items: center;
           justify-content: center;
           font-size: 16px;
+          transition: transform 0.4s ease;
         }
         .settings-btn:hover {
           color: var(--text-color);
+        }
+        
+        .settings-btn.loading {
+          animation: spin 1s linear infinite;
+          pointer-events: none;
+          opacity: 0.6;
         }
 
         .settings-panel {
@@ -633,7 +650,7 @@ function getWebviewBaseContent() {
             <div class="header">
               <h1 class="title">colabd connection</h1>
               <div class="header-actions">
-                <button class="settings-btn" onclick="triggerCommand(this, 'refreshView')" title="Refresh Dashboard Status">⟳</button>
+                <button id="btnRefresh" class="settings-btn" onclick="triggerCommand(this, 'refreshView')" title="Refresh Dashboard Status">⟳</button>
                 <span id="headerBadge" class="badge">offline</span>
                 <button class="settings-btn" onclick="toggleSettings()">⚙</button>
               </div>
@@ -754,13 +771,13 @@ function getWebviewBaseContent() {
         let lastStatus = null;
         
         function triggerCommand(btn, cmd) {
-          if (cmd === 'openTerminal' || cmd === 'openExternalTerminal' || cmd === 'refreshView') {
+          if (cmd === 'openTerminal' || cmd === 'openExternalTerminal') {
             vscode.postMessage({ command: cmd });
-            if (cmd === 'refreshView') {
-              btn.style.transform = 'rotate(360deg)';
-              btn.style.transition = 'transform 0.4s ease';
-              setTimeout(() => { btn.style.transform = 'none'; btn.style.transition = 'none'; }, 400);
-            }
+            return;
+          }
+          if (cmd === 'refreshView') {
+            btn.classList.add("loading");
+            vscode.postMessage({ command: cmd });
             return;
           }
           btn.classList.add("loading");
@@ -813,6 +830,7 @@ function getWebviewBaseContent() {
         }
 
         function updateUI(status) {
+          document.getElementById("btnRefresh").classList.remove("loading");
           if (status === null && lastStatus !== null) {
             document.getElementById("headerBadge").style.opacity = "0.5";
             return;
@@ -911,9 +929,10 @@ function getWebviewBaseContent() {
           // Buttons Server control
           const serverGroup = document.getElementById("btnGroupServer");
           if (isRunning) {
-            serverGroup.innerHTML = \`
+            serverGroup.innerHTML = `
               <button class="btn btn-danger" onclick="triggerCommand(this, 'stopDaemon')"><div class="spinner"></div>Stop Server</button>
               <button class="btn" onclick="triggerCommand(this, 'linkWorkspace')"><div class="spinner"></div>Link Folder...</button>
+              \${status.activeLink ? \`<button class="btn btn-danger" onclick="triggerCommand(this, 'unlinkWorkspace')"><div class="spinner"></div>Unlink Folder</button>\` : ''}
             \`;
           } else {
             serverGroup.innerHTML = \`
@@ -999,14 +1018,14 @@ function activate(context) {
           if (listRes.statusCode === 200) {
             try {
               const links = JSON.parse(listBody);
-              const matched = links.find(l => l.path === currentPath);
+              const matched = links.find(l => currentPath === l.path || currentPath.startsWith(l.path + "/") || l.path.startsWith(currentPath + "/"));
               if (matched) {
                 linkName = matched.name;
               }
             } catch {}
           }
 
-          const statusUrl = linkName ? `${daemonUrl}/v1/status?link=${encodeURIComponent(linkName)}` : `${daemonUrl}/v1/status`;
+          const statusUrl = linkName ? `${daemonUrl}/v1/status?link=${encodeURIComponent(linkName)}` : `${daemonUrl}/v1/status?link=none`;
           const req = http.get(statusUrl, { timeout: 3000 }, (res) => {
             let body = "";
             res.on("data", (chunk) => body += chunk);
@@ -1148,6 +1167,8 @@ function activate(context) {
           vscode.commands.executeCommand("colab-sync.stopDaemon");
         } else if (message.command === "linkWorkspace") {
           vscode.commands.executeCommand("colab-sync.linkWorkspace");
+        } else if (message.command === "unlinkWorkspace") {
+          vscode.commands.executeCommand("colab-sync.unlinkWorkspace");
         } else if (message.command === "teardownSession") {
           vscode.commands.executeCommand("colab-sync.teardownSession");
         } else if (message.command === "forceSync") {
@@ -1420,6 +1441,43 @@ function activate(context) {
           req.write(postData);
           req.end();
           vscode.window.showInformationMessage("Workspace successfully linked.");
+        }
+      });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("colab-sync.unlinkWorkspace", async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      const rootPath = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : null;
+      if (!rootPath) return;
+
+      exec(`node /home/crimson/Projects/notebook/colab-sync/src/colabd.js unlink "${rootPath}"`, (err) => {
+        if (err) {
+          vscode.window.showErrorMessage(`Unlinking failed: ${err.message}`);
+        } else {
+          const postData = JSON.stringify({ path: rootPath });
+          const req = http.request({
+            hostname: "127.0.0.1",
+            port: daemonPort,
+            path: "/v1/link",
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              "Content-Length": Buffer.byteLength(postData)
+            }
+          }, (res) => {
+            res.on("data", () => {});
+            res.on("end", () => {
+              updateWebview();
+            });
+          });
+          req.on("error", () => {
+            updateWebview();
+          });
+          req.write(postData);
+          req.end();
+          vscode.window.showInformationMessage("Workspace successfully unlinked.");
         }
       });
     })
