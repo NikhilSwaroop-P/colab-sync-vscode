@@ -976,39 +976,84 @@ function activate(context) {
 
   async function getDaemonStatus() {
     return new Promise((resolve) => {
-      const req = http.get(`${daemonUrl}/v1/status`, { timeout: 3000 }, (res) => {
-        let body = "";
-        res.on("data", (chunk) => body += chunk);
-        res.on("end", () => {
-          if (res.statusCode === 200) {
-            const data = JSON.parse(body);
-            if (data.connected && data.activeLink) {
-              const syncReq = http.get(`${daemonUrl}/v1/sync`, { timeout: 3000 }, (syncRes) => {
-                let syncBody = "";
-                syncRes.on("data", (c) => syncBody += c);
-                syncRes.on("end", () => {
-                  if (syncRes.statusCode === 200) {
-                    try {
-                      data.syncLevel = JSON.parse(syncBody);
-                    } catch {}
-                  }
-                  resolve(data);
-                });
-              });
-              syncReq.on("error", () => resolve(data));
-              syncReq.end();
-            } else {
-              resolve(data);
-            }
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      const currentPath = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : null;
+
+      const listReq = http.get(`${daemonUrl}/v1/link`, { timeout: 2000 }, (listRes) => {
+        let listBody = "";
+        listRes.on("data", (chunk) => listBody += chunk);
+        listRes.on("end", () => {
+          let linkName = "";
+          if (listRes.statusCode === 200) {
+            try {
+              const links = JSON.parse(listBody);
+              const matched = links.find(l => l.path === currentPath);
+              if (matched) {
+                linkName = matched.name;
+              }
+            } catch {}
           }
-          else resolve(null);
+
+          const statusUrl = linkName ? `${daemonUrl}/v1/status?link=${encodeURIComponent(linkName)}` : `${daemonUrl}/v1/status`;
+          const req = http.get(statusUrl, { timeout: 3000 }, (res) => {
+            let body = "";
+            res.on("data", (chunk) => body += chunk);
+            res.on("end", () => {
+              if (res.statusCode === 200) {
+                const data = JSON.parse(body);
+                data.currentWorkspacePath = currentPath;
+                data.currentLinkName = linkName;
+                if (data.connected && data.activeLink) {
+                  const syncUrl = linkName ? `${daemonUrl}/v1/sync?link=${encodeURIComponent(linkName)}` : `${daemonUrl}/v1/sync`;
+                  const syncReq = http.get(syncUrl, { timeout: 3000 }, (syncRes) => {
+                    let syncBody = "";
+                    syncRes.on("data", (c) => syncBody += c);
+                    syncRes.on("end", () => {
+                      if (syncRes.statusCode === 200) {
+                        try {
+                          data.syncLevel = JSON.parse(syncBody);
+                        } catch {}
+                      }
+                      resolve(data);
+                    });
+                  });
+                  syncReq.on("error", () => resolve(data));
+                  syncReq.end();
+                } else {
+                  resolve(data);
+                }
+              }
+              else resolve(null);
+            });
+          });
+          req.on("error", () => resolve(null));
+          req.on("timeout", () => {
+            req.destroy();
+            resolve(null);
+          });
+          req.end();
         });
       });
-      req.on("error", () => resolve(null));
-      req.on("timeout", () => {
-        req.destroy();
-        resolve(null);
+      listReq.on("error", () => {
+        const req = http.get(`${daemonUrl}/v1/status`, { timeout: 3000 }, (res) => {
+          let body = "";
+          res.on("data", (chunk) => body += chunk);
+          res.on("end", () => {
+            if (res.statusCode === 200) {
+              resolve(JSON.parse(body));
+            } else {
+              resolve(null);
+            }
+          });
+        });
+        req.on("error", () => resolve(null));
+        req.on("timeout", () => {
+          req.destroy();
+          resolve(null);
+        });
+        req.end();
       });
+      listReq.end();
     });
   }
 
