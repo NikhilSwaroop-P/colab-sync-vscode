@@ -60,7 +60,7 @@ node /path/to/colab-sync/src/colabd.js --workspace /path/to/your/workspace
 
 - **Model Context Protocol (MCP) Server**: A dedicated MCP server wrapper is currently in development to allow AI coding assistants to seamlessly introspect the connected Colab environment.
 - **Git Bulk Push (Unstable)**: The `Git Bulk Sync` feature is currently experimental and *does not work properly*. It struggles with deeply nested submodules and occasionally fails to sync massive files natively. A complete rewrite of the sync daemon for bulk transfers is in progress.
-- **Sync Now Button**: The `Sync Now` (Force Sync) button in the UI is currently disconnected and not functioning. Please use the terminal commands for syncing for now.
+- **Sync Now Button**: The `Sync Now` (Force Sync) button in the UI is currently disconnected and not functioning. Please rely on the background auto-sync mechanism which continuously synchronizes your files automatically instead.
 - **Sync File Deletion Risk**: Because the bi-directional sync is still in early testing phases, edge cases during synchronization may sometimes result in accidental file deletions. Please keep backups of important work.
 - **Terminal Input Limitations**: The interactive Colab terminal does not currently support piping `stdin` inputs to commands that are actively running (e.g., answering interactive `[y/N]` prompts mid-execution might freeze or fail).
 - **Colab File Observability**: Enhancing the VS Code sidebar to directly explore and preview remote Colab files without needing the terminal is planned.
