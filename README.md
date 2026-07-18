@@ -53,6 +53,12 @@ node /path/to/colab-sync/src/colabd.js --workspace /path/to/your/workspace
 | `Colab Sync: Force Sync` | Executes a bi-directional file synchronization pass. |
 | `Colab Sync: Kill Session` | Terminates the active Google Colab cloud runtime. |
 
+## In Progress & Known Issues
+
+- **Model Context Protocol (MCP) Server**: A dedicated MCP server wrapper is currently in development to allow AI coding assistants to seamlessly introspect the connected Colab environment.
+- **Git Bulk Push (Unstable)**: The `Git Bulk Sync` feature is currently experimental and *does not work properly*. It struggles with deeply nested submodules and occasionally fails to sync massive files natively. A complete rewrite of the sync daemon for bulk transfers is in progress.
+- **Colab File Observability**: Enhancing the VS Code sidebar to directly explore and preview remote Colab files without needing the terminal is planned.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

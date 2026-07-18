@@ -11,6 +11,9 @@
   "engines": {
     "vscode": "^1.80.0"
   },
+  "activationEvents": [
+    "*"
+  ],
   "categories": [
     "Other"
   ],
@@ -78,6 +81,16 @@
         "command": "colab-sync.openDashboard",
         "title": "Open Dashboard",
         "icon": "$(dashboard)"
+      },
+      {
+        "command": "colab-sync.gitSync",
+        "title": "Git Bulk Sync",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "colab-sync.configureGitHub",
+        "title": "Configure GitHub Sync...",
+        "icon": "$(settings-gear)"
       }
     ],
     "menus": {

@@ -700,6 +700,10 @@ function getWebviewBaseContent() {
                       <td class="label">incoming changes</td>
                       <td id="cellIncoming" class="value">0 files</td>
                     </tr>
+                    <tr>
+                      <td class="label">last sync speed</td>
+                      <td id="cellSyncSpeed" class="value">-</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -758,9 +762,16 @@ function getWebviewBaseContent() {
               <div class="section-title">development tools</div>
               <div class="button-group">
                 <button class="btn btn-primary" onclick="triggerCommand(this, 'forceSync')"><div class="spinner"></div>Sync Now</button>
+                <button id="btnPauseSync" class="btn" onclick="triggerCommand(this, 'toggleSyncCheck')">Pause Tracking</button>
                 <button class="btn" onclick="triggerCommand(this, 'openTerminal')"><div class="spinner"></div>Open VS Code Shell</button>
                 <button class="btn" onclick="triggerCommand(this, 'openExternalTerminal')"><div class="spinner"></div>Open External Terminal</button>
               </div>
+              <div class="section-title" style="margin-top:16px;">git bulk sync</div>
+              <div class="button-group">
+                <button class="btn btn-primary" onclick="triggerCommand(this, 'gitSync')"><div class="spinner"></div>Git Bulk Sync</button>
+                <button class="btn" onclick="triggerCommand(this, 'configureGitHub')"><div class="spinner"></div>Configure GitHub...</button>
+              </div>
+              <div id="gitSyncStatus" style="font-size:12px;color:var(--text-secondary);margin-top:8px;"></div>
             </div>
           </div>
         </div>
@@ -782,9 +793,6 @@ function getWebviewBaseContent() {
           }
           btn.classList.add("loading");
           vscode.postMessage({ command: cmd });
-          setTimeout(() => {
-            btn.classList.remove("loading");
-          }, 4000);
         }
 
         function provision(btn) {
@@ -793,9 +801,6 @@ function getWebviewBaseContent() {
           const state = vscode.getState() || { theme: "minimal" };
           vscode.setState({ ...state, hardware: hardware });
           vscode.postMessage({ command: 'provisionSession', hardware: hardware });
-          setTimeout(() => {
-            btn.classList.remove("loading");
-          }, 8000);
         }
 
         function toggleSettings() {
@@ -831,11 +836,11 @@ function getWebviewBaseContent() {
 
         function updateUI(status) {
           document.getElementById("btnRefresh").classList.remove("loading");
-          if (status === null && lastStatus !== null) {
+          if (status === null) {
             document.getElementById("headerBadge").style.opacity = "0.5";
-            return;
+          } else {
+            document.getElementById("headerBadge").style.opacity = "1";
           }
-          document.getElementById("headerBadge").style.opacity = "1";
           lastStatus = status;
 
           const isRunning = !!status;
@@ -876,13 +881,24 @@ function getWebviewBaseContent() {
           }
           document.getElementById("cellRate").innerText = rateText;
           document.getElementById("cellQuota").innerText = usageLeftText;
-
-          if (status && status.syncLevel) {
+          if (status && status.pauseSyncCheck) {
+            document.getElementById("cellOutgoing").innerText = "Paused";
+            document.getElementById("cellIncoming").innerText = "Paused";
+          } else if (status && status.syncLevel) {
             document.getElementById("cellOutgoing").innerText = status.syncLevel.outgoing + " files";
             document.getElementById("cellIncoming").innerText = status.syncLevel.incoming + " files";
           } else {
             document.getElementById("cellOutgoing").innerText = "0 files";
             document.getElementById("cellIncoming").innerText = "0 files";
+          }
+          
+          if (status && status.lastSyncStats && status.lastSyncStats.ms > 0) {
+            const kb = status.lastSyncStats.bytes / 1024;
+            const secs = status.lastSyncStats.ms / 1000;
+            const rate = kb / secs;
+            document.getElementById("cellSyncSpeed").innerText = rate > 1024 ? (rate / 1024).toFixed(2) + " MB/s" : rate.toFixed(2) + " KB/s";
+          } else {
+            document.getElementById("cellSyncSpeed").innerText = "-";
           }
 
           // Resource Utilization
@@ -974,11 +990,28 @@ function getWebviewBaseContent() {
           } else {
             devTools.style.display = "none";
           }
+          
+          const btnPause = document.getElementById("btnPauseSync");
+          if (btnPause) {
+            if (status && status.pauseSyncCheck) {
+              btnPause.innerText = "Resume Tracking";
+              btnPause.classList.add("btn-danger");
+            } else {
+              btnPause.innerText = "Pause Tracking";
+              btnPause.classList.remove("btn-danger");
+            }
+          }
         }
 
         window.addEventListener('message', event => {
           const message = event.data;
+          if (message.command === 'gitSyncProgress') {
+            const el = document.getElementById('gitSyncStatus');
+            if (el) { el.textContent = '⟳ ' + message.msg; el.style.color = message.msg.startsWith('done') ? 'var(--success)' : 'var(--text-secondary)'; }
+            return;
+          }
           if (message.type === 'updateStatus') {
+            document.querySelectorAll(".loading").forEach(el => el.classList.remove("loading"));
             updateUI(message.status);
           }
         });
@@ -1005,7 +1038,13 @@ function activate(context) {
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
+  let _statusInFlight = false;
+  let _daemonStarting = false;
+  let pauseSyncCheck = false;
+
   async function getDaemonStatus() {
+    if (_statusInFlight) return null;
+    _statusInFlight = true;
     return new Promise((resolve) => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       const currentPath = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : null;
@@ -1026,7 +1065,7 @@ function activate(context) {
           }
 
           const statusUrl = linkName ? `${daemonUrl}/v1/status?link=${encodeURIComponent(linkName)}` : `${daemonUrl}/v1/status?link=none`;
-          const req = http.get(statusUrl, { timeout: 3000 }, (res) => {
+          const req = http.get(statusUrl, { timeout: 10000 }, (res) => {
             let body = "";
             res.on("data", (chunk) => body += chunk);
             res.on("end", () => {
@@ -1034,7 +1073,7 @@ function activate(context) {
                 const data = JSON.parse(body);
                 data.currentWorkspacePath = currentPath;
                 data.currentLinkName = linkName;
-                if (data.connected && data.activeLink) {
+                if (data.connected && data.activeLink && !pauseSyncCheck) {
                   const syncUrl = linkName ? `${daemonUrl}/v1/sync?link=${encodeURIComponent(linkName)}` : `${daemonUrl}/v1/sync`;
                   const syncReq = http.get(syncUrl, { timeout: 3000 }, (syncRes) => {
                     let syncBody = "";
@@ -1049,8 +1088,13 @@ function activate(context) {
                     });
                   });
                   syncReq.on("error", () => resolve(data));
+                  syncReq.on("timeout", () => {
+                    syncReq.destroy();
+                    resolve(data);
+                  });
                   syncReq.end();
                 } else {
+                  if (pauseSyncCheck) data.pauseSyncCheck = true;
                   resolve(data);
                 }
               }
@@ -1064,6 +1108,10 @@ function activate(context) {
           });
           req.end();
         });
+      });
+      listReq.on("timeout", () => {
+        listReq.destroy();
+        resolve(null);
       });
       listReq.on("error", () => {
         const req = http.get(`${daemonUrl}/v1/status`, { timeout: 3000 }, (res) => {
@@ -1085,10 +1133,11 @@ function activate(context) {
         req.end();
       });
       listReq.end();
-    });
+    }).finally(() => { _statusInFlight = false; });
   }
 
   async function updateWebview() {
+    if (_daemonStarting) return;
     const status = await getDaemonStatus();
     if (status) {
       let metricsText = "";
@@ -1181,11 +1230,40 @@ function activate(context) {
           vscode.commands.executeCommand("colab-sync.provisionSessionFromWebview", message.hardware);
         } else if (message.command === "refreshView") {
           vscode.commands.executeCommand("colab-sync.refreshView");
+        } else if (message.command === "gitSync") {
+          vscode.commands.executeCommand("colab-sync.gitSync");
+        } else if (message.command === "configureGitHub") {
+          vscode.commands.executeCommand("colab-sync.configureGitHub");
+        } else if (message.command === "toggleSyncCheck") {
+          vscode.commands.executeCommand("colab-sync.toggleSyncCheck");
         }
       }, null, context.subscriptions);
 
       activeWebview.webview.html = getWebviewBaseContent();
       await updateWebview();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("colab-sync.toggleSyncCheck", () => {
+      const req = http.request({
+        hostname: "127.0.0.1",
+        port: daemonPort,
+        path: "/v1/config/auto-sync",
+        method: "POST"
+      }, (res) => {
+        let body = "";
+        res.on("data", (c) => body += c);
+        res.on("end", () => {
+          try {
+            const data = JSON.parse(body);
+            pauseSyncCheck = data.pauseAutoSync;
+            updateWebview();
+          } catch {}
+        });
+      });
+      req.on("error", () => {});
+      req.end();
     })
   );
 
@@ -1213,23 +1291,23 @@ function activate(context) {
         title: `Provisioning ${hardware} runtime on Colab...`,
         cancellable: false
       }, async () => {
+        let data;
         try {
           const res = await fetch(`${daemonUrl}/v1/status`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ provision: true, variant, accelerator })
           });
-          const data = await res.json();
+          data = await res.json();
           if (data.connected) {
             vscode.window.showInformationMessage("Successfully connected to remote session.");
           } else {
-            vscode.window.showErrorMessage(`Provisioning failed: ${data.message || "Unknown error"}`);
+            vscode.window.showErrorMessage(`Provisioning failed: ${data.message || data.error || "Unknown error"}`);
           }
         } catch (err) {
           vscode.window.showErrorMessage(`Network error calling daemon: ${err.message}`);
         }
-        provider.refresh(data);
-        updateWebview();
+        await updateWebview();
       });
     })
   );
@@ -1277,23 +1355,23 @@ function activate(context) {
         title: `Provisioning ${selection} runtime on Colab...`,
         cancellable: false
       }, async () => {
+        let data;
         try {
           const res = await fetch(`${daemonUrl}/v1/status`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ provision: true, variant, accelerator })
           });
-          const data = await res.json();
+          data = await res.json();
           if (data.connected) {
             vscode.window.showInformationMessage("Successfully connected to remote session.");
           } else {
-            vscode.window.showErrorMessage(`Provisioning failed: ${data.message || "Unknown error"}`);
+            vscode.window.showErrorMessage(`Provisioning failed: ${data.message || data.error || "Unknown error"}`);
           }
         } catch (err) {
           vscode.window.showErrorMessage(`Network error calling daemon: ${err.message}`);
         }
-        provider.refresh(data);
-        updateWebview();
+        await updateWebview();
       });
     })
   );
@@ -1311,24 +1389,73 @@ function activate(context) {
         title: "Starting colabd daemon...",
         cancellable: false
       }, async () => {
-        return new Promise((resolve) => {
-          const workspaceFolders = vscode.workspace.workspaceFolders;
-          const workspacePath = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : "/home/crimson/Projects/notebook/colab-gpu-test";
-          const child = spawn("node", [
+        _daemonStarting = true;
+
+        // If already running, just refresh the UI and bail
+        const existing = await getDaemonStatus();
+        if (existing !== null) {
+          _daemonStarting = false;
+          await updateWebview();
+          return;
+        }
+
+        const spawnDaemon = (workspacePath) => {
+          const child = spawn(process.execPath, [
             "/home/crimson/Projects/notebook/colab-sync/src/colabd.js",
-            "--workspace",
-            workspacePath
-          ], {
-            stdio: "ignore",
-            detached: true,
-            env: { ...process.env }
-          });
+            "--workspace", workspacePath
+          ], { stdio: ["ignore", "ignore", "pipe"], detached: true, env: { ...process.env } });
+          let spawnError = null, exitCode = null, stderrOutput = "";
+          child.stderr.on("data", (d) => { stderrOutput += d.toString(); });
+          child.on("error", (err) => { spawnError = err; });
+          child.on("exit", (code) => { if (code !== null && code !== 0) exitCode = code; });
           child.unref();
-          setTimeout(() => {
-            updateWebview();
-            resolve();
-          }, 1500);
-        });
+          return { getSpawnError: () => spawnError, getExitCode: () => exitCode, getStderr: () => stderrOutput };
+        };
+
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const workspacePath = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : "/home/crimson/Projects/notebook/colab-gpu-test";
+        let proc = spawnDaemon(workspacePath);
+        let retried = false;
+
+        for (let i = 0; i < 40; i++) {
+          await new Promise(r => setTimeout(r, 500));
+          if (proc.getSpawnError()) {
+            _daemonStarting = false;
+            vscode.window.showErrorMessage(`Failed to start colabd: ${proc.getSpawnError().message}`);
+            await updateWebview();
+            return;
+          }
+          if (proc.getExitCode() !== null && !retried) {
+            const stderr = proc.getStderr();
+            if (stderr.includes("already in use") || stderr.includes("EADDRINUSE")) {
+              // Port occupied by a stale process — kill it and retry once
+              retried = true;
+              await new Promise((res, rej) => exec(`lsof -t -i tcp:${daemonPort} -s tcp:listen`, (err, stdout) => {
+                if (stdout.trim()) exec(`kill -9 ${stdout.trim().split("\n").join(" ")}`, res);
+                else res();
+              }));
+              await new Promise(r => setTimeout(r, 800));
+              proc = spawnDaemon(workspacePath);
+              continue;
+            }
+            _daemonStarting = false;
+            const hint = stderr ? stderr.slice(0, 200) : `exit code ${proc.getExitCode()}`;
+            vscode.window.showErrorMessage(`colabd crashed on startup: ${hint}`);
+            await updateWebview();
+            return;
+          }
+          const status = await getDaemonStatus();
+          if (status !== null) {
+            _daemonStarting = false;
+            await updateWebview();
+            return;
+          }
+        }
+
+        _daemonStarting = false;
+        const hint = proc.getStderr() ? proc.getStderr().slice(0, 200) : "Check that port 8291 is free.";
+        vscode.window.showErrorMessage(`colabd did not start within 20 seconds. ${hint}`);
+        await updateWebview();
       });
     })
   );
@@ -1448,9 +1575,12 @@ function activate(context) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("colab-sync.unlinkWorkspace", async () => {
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      const rootPath = workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : null;
-      if (!rootPath) return;
+      const status = provider.latestStatus;
+      if (!status || !status.activeLink) {
+        vscode.window.showErrorMessage("No active workspace linked.");
+        return;
+      }
+      const rootPath = status.activeLink.path;
 
       exec(`node /home/crimson/Projects/notebook/colab-sync/src/colabd.js unlink "${rootPath}"`, (err) => {
         if (err) {
@@ -1491,13 +1621,130 @@ function activate(context) {
         cancellable: false
       }, async () => {
         try {
-          const res = await fetch(`${daemonUrl}/v1/sync?direction=both`, { method: "POST" });
+          const status = provider.latestStatus;
+          const linkParam = (status && status.activeLink) ? `&link=${encodeURIComponent(status.activeLink.name)}` : "";
+          const res = await fetch(`${daemonUrl}/v1/sync?direction=both${linkParam}`, { method: "POST" });
           const data = await res.json();
-          vscode.window.showInformationMessage(`Sync complete! Changes tracked: ${JSON.stringify(data.summary || data)}`);
+          let msg = `Sync complete! Changes tracked: ${JSON.stringify(data.summary || data)}`;
+          if (data.bytesTransferred !== undefined && data.elapsedMs) {
+            const kb = data.bytesTransferred / 1024;
+            const secs = data.elapsedMs / 1000;
+            const rate = kb / secs;
+            if (rate > 1024) {
+              msg += ` | Transfer rate: ${(rate / 1024).toFixed(2)} MB/s`;
+            } else {
+              msg += ` | Transfer rate: ${rate.toFixed(2)} KB/s`;
+            }
+          }
+          vscode.window.showInformationMessage(msg);
         } catch (err) {
           vscode.window.showErrorMessage(`Sync failed: ${err.message}`);
         }
         updateWebview();
+      });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("colab-sync.configureGitHub", async () => {
+      const ownerRepo = await vscode.window.showInputBox({ prompt: "GitHub repository (owner/repo)", placeHolder: "e.g. octocat/my-colab-workspace" });
+      if (!ownerRepo || !ownerRepo.includes("/")) { if (ownerRepo !== undefined) vscode.window.showErrorMessage("Enter in owner/repo format."); return; }
+      const [owner, repo] = ownerRepo.split("/");
+      const token = await vscode.window.showInputBox({ prompt: "GitHub Personal Access Token (needs repo scope)", password: true });
+      if (!token) return;
+      vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Verifying GitHub config for ${owner}/${repo}...`,
+        cancellable: false
+      }, async () => {
+        try {
+          const res = await fetch(`${daemonUrl}/v1/git-setup`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ owner, repo, token })
+          });
+          const data = await res.json();
+          if (data.error) { vscode.window.showErrorMessage(`GitHub config failed: ${data.error}`); }
+          else { vscode.window.showInformationMessage(`GitHub sync configured: ${owner}/${repo}`); await updateWebview(); }
+        } catch (err) { vscode.window.showErrorMessage(`Failed: ${err.message}`); }
+      });
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("colab-sync.gitSync", () => {
+      vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: "Git bulk sync",
+        cancellable: false
+      }, async (progress) => {
+        const out = vscode.window.createOutputChannel("Colab Git Sync");
+        out.show(true);
+        const postStep = (msg) => {
+          progress.report({ message: msg });
+          out.appendLine(`[${new Date().toLocaleTimeString()}] ${msg}`);
+          if (activeWebview) activeWebview.webview.postMessage({ command: "gitSyncProgress", msg });
+        };
+        try {
+          const gitRes = await fetch(`${daemonUrl}/v1/git-status`);
+          const gitStatus = await gitRes.json();
+          if (!gitStatus.configured) {
+            const answer = await vscode.window.showWarningMessage("GitHub sync is not configured. Configure now?", "Configure", "Cancel");
+            if (answer === "Configure") vscode.commands.executeCommand("colab-sync.configureGitHub");
+            return;
+          }
+          const status = provider.latestStatus;
+          const linkParam = (status && status.activeLink) ? `?link=${encodeURIComponent(status.activeLink.name)}` : "";
+          postStep("connecting...");
+          await new Promise((resolve, reject) => {
+            const postData = JSON.stringify({ direction: "both" });
+            const reqOpts = {
+              hostname: "127.0.0.1",
+              port: daemonPort,
+              path: `/v1/git-sync${linkParam}`,
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(postData) }
+            };
+            const req = http.request(reqOpts, (res) => {
+              let buf = "";
+              let evtName = null;
+              let finalData = null;
+              res.on("data", (chunk) => {
+                buf += chunk.toString();
+                const lines = buf.split("\n");
+                buf = lines.pop();
+                for (const line of lines) {
+                  if (line.startsWith("event: ")) { evtName = line.slice(7).trim(); }
+                  else if (line.startsWith("data: ")) {
+                    try {
+                      const payload = JSON.parse(line.slice(6));
+                      if (evtName === "progress") { postStep(payload.msg); }
+                      else if (evtName === "done") { finalData = payload; }
+                      else if (evtName === "error") { reject(new Error(payload.error)); }
+                    } catch {}
+                  }
+                }
+              });
+              res.on("end", () => {
+                if (finalData && finalData.errors && finalData.errors.length > 0) {
+                  postStep("done with warnings");
+                  vscode.window.showWarningMessage(`Git sync warnings: ${finalData.errors.join("; ")}`);
+                } else {
+                  postStep("done ✓");
+                  vscode.window.showInformationMessage("Git bulk sync complete.");
+                }
+                resolve();
+              });
+            });
+            req.on("error", reject);
+            req.write(postData);
+            req.end();
+          });
+        } catch (err) {
+          postStep(`failed: ${err.message}`);
+          vscode.window.showErrorMessage(`Git sync failed: ${err.message}`);
+        }
+        await updateWebview();
       });
     })
   );
@@ -1572,7 +1819,7 @@ function activate(context) {
 
   const interval = setInterval(() => {
     updateWebview();
-  }, 10000);
+  }, 30000);
 
   context.subscriptions.push({
     dispose: () => clearInterval(interval)
