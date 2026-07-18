@@ -21,7 +21,7 @@ You can download and install the extension directly from the VS Code Marketplace
 
 ### 2. Manual VSIX Installation
 For local development or manual deployment:
-1. Download the `colab-sync-vscode-0.1.0.vsix` release file.
+1. Download the `colab-sync-vscode-0.1.1.vsix` release file.
 2. Open VS Code, open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`), and run:
    **Extensions: Install from VSIX...**
 3. Select the downloaded `.vsix` file to complete the installation.
