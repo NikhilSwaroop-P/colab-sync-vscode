@@ -1401,7 +1401,7 @@ function activate(context) {
 
         const spawnDaemon = (workspacePath) => {
           const child = spawn(process.execPath, [
-            "/home/crimson/Projects/notebook/colab-sync/src/colabd.js",
+            path.join(__dirname, "daemon/src/colabd.js"),
             "--workspace", workspacePath
           ], { stdio: ["ignore", "ignore", "pipe"], detached: true, env: { ...process.env } });
           let spawnError = null, exitCode = null, stderrOutput = "";
@@ -1541,7 +1541,7 @@ function activate(context) {
 
       if (!linkName) return;
 
-      exec(`node /home/crimson/Projects/notebook/colab-sync/src/colabd.js link "${targetFolder}" --name "${linkName}"`, (err) => {
+      exec(`node "${path.join(__dirname, "daemon/src/colabd.js")}" link "${targetFolder}" --name "${linkName}"`, (err) => {
         if (err) {
           vscode.window.showErrorMessage(`Linking failed: ${err.message}`);
           updateWebview();
@@ -1582,7 +1582,7 @@ function activate(context) {
       }
       const rootPath = status.activeLink.path;
 
-      exec(`node /home/crimson/Projects/notebook/colab-sync/src/colabd.js unlink "${rootPath}"`, (err) => {
+      exec(`node "${path.join(__dirname, "daemon/src/colabd.js")}" unlink "${rootPath}"`, (err) => {
         if (err) {
           vscode.window.showErrorMessage(`Unlinking failed: ${err.message}`);
         } else {
@@ -1784,7 +1784,7 @@ function activate(context) {
       const term = vscode.window.createTerminal({
         name: "Colab Shell",
         shellPath: "node",
-        shellArgs: ["/home/crimson/Projects/notebook/colab-sync/colab-term.js"]
+        shellArgs: [path.join(__dirname, "daemon/colab-term.js")]
       });
       term.show();
     })
@@ -1792,7 +1792,7 @@ function activate(context) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("colab-sync.openExternalTerminal", () => {
-      const scriptPath = "/home/crimson/Projects/notebook/colab-sync/colab-term.js";
+      const scriptPath = path.join(__dirname, "daemon/colab-term.js");
       const procKitty = spawn("kitty", ["node", scriptPath], {
         detached: true,
         stdio: "ignore"
