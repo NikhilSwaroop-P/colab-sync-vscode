@@ -2,6 +2,9 @@
 
 Colab Sync Control is a professional VS Code extension that provides a visual dashboard, sidebar interface, and status bar telemetry to manage and synchronize your local workspace folders with Google Colab runtimes.
 
+## Demonstration
+<video src="https://github.com/crimson-blitz/colab-sync-vscode/raw/main/assets/demo.mp4" controls autoplay muted loop width="100%"></video>
+
 ## Features
 
 - **Interactive Local Shell**: Open zero-lag interactive terminals directly inside VS Code or launch external window shells (e.g. Kitty terminal emulator) connected to the remote Colab runtime.
