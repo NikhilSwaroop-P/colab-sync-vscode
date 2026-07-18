@@ -28,15 +28,7 @@ For local development or manual deployment:
 
 ## Getting Started
 
-### 1. Prerequisites
-
-Make sure the `colabd` daemon is running on your system. You can install it from the core repository and start it directly via the VS Code Command Palette:
-
-```bash
-node /path/to/colab-sync/src/colabd.js --workspace /path/to/your/workspace
-```
-
-### 2. Usage
+### Usage
 
 1. Open the **Colab Sync** sidebar panel in the VS Code Activity Bar.
 2. Click **Open Web UI Dashboard** to view live metrics and change themes.
