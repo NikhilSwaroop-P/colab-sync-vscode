@@ -52,7 +52,7 @@ server.tool(
   "Execute a shell command on the connected Colab GPU runtime. Use for python, pip, nvidia-smi, model training, etc.",
   {
     command: z.string().describe("Shell command to execute"),
-    timeout: z.number().optional().default(120).describe("Max wait seconds"),
+    timeout: z.number().optional().describe("Max wait seconds (default: no limit)"),
     workdir: z.string().optional().describe("Change directory before execution")
   },
   async ({ command, timeout, workdir }) => {
@@ -62,7 +62,7 @@ server.tool(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ command: finalCmd }),
-      timeout: timeout ?? 120
+      timeout: timeout
     });
     const data = await res.json();
     if (data.output) {

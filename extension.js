@@ -209,6 +209,61 @@ class ColabSyncProvider {
   }
 }
 
+class ColabFileSystemProvider {
+  constructor() {
+    this._onDidChangeTreeData = new vscode.EventEmitter();
+    this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+  }
+
+  refresh() {
+    this._onDidChangeTreeData.fire();
+  }
+
+  getTreeItem(element) {
+    return element;
+  }
+
+  async getChildren(element) {
+    const targetPath = element ? element.fsPath : "";
+    try {
+      const res = await fetch(`http://127.0.0.1:8291/v1/fs/list?path=${encodeURIComponent(targetPath)}`);
+      if (!res.ok) {
+        if (res.status === 503) {
+          const item = new vscode.TreeItem("Colab Runtime not connected", vscode.TreeItemCollapsibleState.None);
+          item.iconPath = new vscode.ThemeIcon("circle-slash");
+          return [item];
+        }
+        return [];
+      }
+      const data = await res.json();
+      return data.map(item => {
+        const isDir = item.type === "directory";
+        const treeItem = new vscode.TreeItem(
+          item.name, 
+          isDir ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+        );
+        treeItem.fsPath = item.path;
+        treeItem.iconPath = isDir ? new vscode.ThemeIcon("folder") : new vscode.ThemeIcon("file");
+        if (!isDir) {
+          treeItem.command = {
+            command: "colab-sync.openRemoteFile",
+            title: "Open File",
+            arguments: [item.path]
+          };
+        }
+        return treeItem;
+      });
+    } catch (e) {
+      if (!element) {
+        const item = new vscode.TreeItem("Daemon offline", vscode.TreeItemCollapsibleState.None);
+        item.iconPath = new vscode.ThemeIcon("error");
+        return [item];
+      }
+      return [];
+    }
+  }
+}
+
 function getWebviewBaseContent() {
   return `
     <!DOCTYPE html>
@@ -1031,6 +1086,9 @@ function activate(context) {
   const provider = new ColabSyncProvider();
   vscode.window.registerTreeDataProvider("colabSyncControl", provider);
 
+  const fsProvider = new ColabFileSystemProvider();
+  vscode.window.registerTreeDataProvider("colabSyncExplorer", fsProvider);
+
   let activeWebview = null;
   let statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBarItem.text = "$(sync) Colab Sync: Stopped";
@@ -1379,6 +1437,39 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand("colab-sync.refreshView", () => {
       updateWebview();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("colab-sync.refreshExplorer", () => {
+      fsProvider.refresh();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("colab-sync.openRemoteFile", async (remotePath) => {
+      try {
+        vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: `Loading ${remotePath}...`
+        }, async () => {
+          const res = await fetch(`http://127.0.0.1:8291/v1/fs/read?path=${encodeURIComponent(remotePath)}`);
+          if (!res.ok) throw new Error("Failed to read remote file");
+          const data = await res.json();
+          let content = "";
+          if (data.format === "base64") {
+            content = Buffer.from(data.content, "base64").toString("utf8");
+          } else {
+            content = data.content;
+          }
+          const doc = await vscode.workspace.openTextDocument({
+            content: content
+          });
+          await vscode.window.showTextDocument(doc, { preview: true });
+        });
+      } catch (err) {
+        vscode.window.showErrorMessage(`Error reading file: ${err.message}`);
+      }
     })
   );
 

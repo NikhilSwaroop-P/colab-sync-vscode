@@ -39,6 +39,10 @@
         {
           "id": "colabSyncControl",
           "name": "Control Panel"
+        },
+        {
+          "id": "colabSyncExplorer",
+          "name": "Colab File Explorer"
         }
       ]
     },
@@ -84,6 +88,16 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "colab-sync.refreshExplorer",
+        "title": "Refresh Explorer",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "colab-sync.openRemoteFile",
+        "title": "Open File",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "colab-sync.openDashboard",
         "title": "Open Dashboard",
         "icon": "$(dashboard)"
@@ -109,7 +123,12 @@
         {
           "command": "colab-sync.refreshView",
           "when": "view == colabSyncControl",
-          "group": "navigation@2"
+          "group": "navigation"
+        },
+        {
+          "command": "colab-sync.refreshExplorer",
+          "when": "view == colabSyncExplorer",
+          "group": "navigation"
         }
       ],
       "view/item/context": [

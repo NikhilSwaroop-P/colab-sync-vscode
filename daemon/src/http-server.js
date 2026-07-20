@@ -4,6 +4,7 @@ import path from "node:path";
 import { addLink, removeLink, getGitConfig, saveGitConfig } from "./config.js";
 import { classify } from "./merge.js";
 import { GitHubSync } from "./github-sync.js";
+import { ColabContentsBackend } from "./contents-backend.js";
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -37,6 +38,9 @@ function sendWsFrame(socket, opcode, payload) {
 
   socket.write(Buffer.concat([header, data]));
 }
+
+let activeExecution = false;
+let activeWs = null;
 
 export function createServer(config, rt, linksRegistry) {
   const server = http.createServer(async (req, res) => {
@@ -360,11 +364,55 @@ export function createServer(config, rt, linksRegistry) {
         }));
       }
 
+      if (method === "GET" && pathname === "/v1/fs/list") {
+        if (!rt.baseUrl) {
+          res.writeHead(503);
+          return res.end(JSON.stringify({ error: "Runtime not connected" }));
+        }
+        const p = url.searchParams.get("path") || "";
+        const backend = new ColabContentsBackend(rt, "content");
+        try {
+          const list = await backend.list(p);
+          res.writeHead(200);
+          return res.end(JSON.stringify(list));
+        } catch (e) {
+          res.writeHead(500);
+          return res.end(JSON.stringify({ error: e.message }));
+        }
+      }
+
+      if (method === "GET" && pathname === "/v1/fs/read") {
+        if (!rt.baseUrl) {
+          res.writeHead(503);
+          return res.end(JSON.stringify({ error: "Runtime not connected" }));
+        }
+        const p = url.searchParams.get("path") || "";
+        const backend = new ColabContentsBackend(rt, "content");
+        try {
+          const fileData = await backend.read(p);
+          res.writeHead(200);
+          return res.end(JSON.stringify({
+            content: fileData.content.toString(fileData.format === "base64" ? "base64" : "utf8"),
+            format: fileData.format || (fileData.content.includes && fileData.content.includes(0) ? "base64" : "text")
+          }));
+        } catch (e) {
+          res.writeHead(500);
+          return res.end(JSON.stringify({ error: e.message }));
+        }
+      }
+
       if (method === "POST" && pathname === "/v1/exec" && rt.baseUrl) {
+        if (activeExecution) {
+          res.writeHead(409);
+          return res.end(JSON.stringify({ error: "A command is currently executing. You must wait for it to finish or call `colab_interrupt` to stop it. For long-running commands, run them in the background (e.g., append `&` or use `nohup`)." }));
+        }
+        activeExecution = true;
+
         const bodyText = (await readBody(req)).toString("utf8");
         const body = bodyText ? JSON.parse(bodyText) : {};
         const cmd = body.command;
         if (!cmd) {
+          activeExecution = false;
           res.writeHead(400);
           return res.end(JSON.stringify({ error: "command is required" }));
         }
@@ -373,6 +421,7 @@ export function createServer(config, rt, linksRegistry) {
         const ws = new WebSocket(wsUrl, {
           headers: { "X-Colab-Runtime-Proxy-Token": rt.proxyToken }
         });
+        activeWs = ws;
 
         const execId = crypto.randomBytes(6).toString("hex");
         let output = "";
@@ -405,6 +454,9 @@ export function createServer(config, rt, linksRegistry) {
         });
 
         await execPromise;
+        activeExecution = false;
+        activeWs = null;
+
         const cleanOutput = output.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, "");
         const lines = cleanOutput.split(/\r?\n/).map(l => l.trim());
         const startIndex = lines.findIndex(l => l.includes(cmd));
