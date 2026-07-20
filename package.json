@@ -2,7 +2,7 @@
   "name": "colab-sync-vscode",
   "displayName": "Colab Sync Control",
   "description": "Control panel for the colabd daemon and interactive GPU terminal launcher.",
-  "version": "0.1.1",
+  "version": "0.1.8",
   "publisher": "crimson-blitz",
   "repository": {
     "type": "git",
@@ -39,7 +39,9 @@
         {
           "id": "colabSyncControl",
           "name": "Control Panel"
-        },
+        }
+      ],
+      "explorer": [
         {
           "id": "colabSyncExplorer",
           "name": "Colab File Explorer"

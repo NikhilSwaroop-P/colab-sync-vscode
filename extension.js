@@ -3,6 +3,7 @@ const { exec, spawn } = require("child_process");
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const packageJson = require("./package.json");
 
 const daemonPort = 8291;
 const daemonUrl = `http://127.0.0.1:${daemonPort}`;
@@ -703,7 +704,10 @@ function getWebviewBaseContent() {
         <div class="outer-wrapper">
           <div class="inner-wrapper">
             <div class="header">
-              <h1 class="title">colabd connection</h1>
+              <h1 class="title">
+                colabd connection
+                <span style="font-size: 12px; color: var(--label-color); vertical-align: middle; margin-left: 8px; font-weight: normal;">v${packageJson.version}</span>
+              </h1>
               <div class="header-actions">
                 <button id="btnRefresh" class="settings-btn" onclick="triggerCommand(this, 'refreshView')" title="Refresh Dashboard Status">⟳</button>
                 <span id="headerBadge" class="badge">offline</span>
@@ -1710,24 +1714,45 @@ function activate(context) {
         location: vscode.ProgressLocation.Notification,
         title: "Running bidirectional file synchronization...",
         cancellable: false
-      }, async () => {
+      }, async (progress) => {
         try {
           const status = provider.latestStatus;
           const linkParam = (status && status.activeLink) ? `&link=${encodeURIComponent(status.activeLink.name)}` : "";
-          const res = await fetch(`${daemonUrl}/v1/sync?direction=both${linkParam}`, { method: "POST" });
-          const data = await res.json();
-          let msg = `Sync complete! Changes tracked: ${JSON.stringify(data.summary || data)}`;
-          if (data.bytesTransferred !== undefined && data.elapsedMs) {
-            const kb = data.bytesTransferred / 1024;
-            const secs = data.elapsedMs / 1000;
-            const rate = kb / secs;
-            if (rate > 1024) {
-              msg += ` | Transfer rate: ${(rate / 1024).toFixed(2)} MB/s`;
-            } else {
-              msg += ` | Transfer rate: ${rate.toFixed(2)} KB/s`;
-            }
-          }
-          vscode.window.showInformationMessage(msg);
+          const syncUrl = `${daemonUrl}/v1/sync?direction=both&stream=1${linkParam}`;
+          
+          return new Promise((resolve, reject) => {
+            const req = http.request(syncUrl, { method: "POST" }, (res) => {
+              let buffer = "";
+              res.on("data", (chunk) => {
+                buffer += chunk.toString();
+                const lines = buffer.split("\n");
+                buffer = lines.pop(); // keep remainder
+                for (const line of lines) {
+                  if (!line.trim()) continue;
+                  try {
+                    const data = JSON.parse(line);
+                    if (data.progress) {
+                      progress.report({ message: `${data.progress.action}: ${data.progress.path}` });
+                    } else if (data.result) {
+                      let msg = `Sync complete! Pushed: ${data.result.pushed}, Pulled: ${data.result.pulled}`;
+                      if (data.result.bytesTransferred !== undefined && data.result.elapsedMs) {
+                        const kb = data.result.bytesTransferred / 1024;
+                        const secs = data.result.elapsedMs / 1000;
+                        const rate = kb / secs;
+                        msg += ` | Transfer rate: ${rate > 1024 ? (rate / 1024).toFixed(2) + " MB/s" : rate.toFixed(2) + " KB/s"}`;
+                      }
+                      vscode.window.showInformationMessage(msg);
+                      resolve();
+                    }
+                  } catch (e) {}
+                }
+              });
+              res.on("end", () => resolve());
+              res.on("error", reject);
+            });
+            req.on("error", reject);
+            req.end();
+          });
         } catch (err) {
           vscode.window.showErrorMessage(`Sync failed: ${err.message}`);
         }
@@ -1908,9 +1933,19 @@ function activate(context) {
 
   updateWebview();
 
-  const interval = setInterval(() => {
+  let lastKnownDaemonState = false;
+
+  const interval = setInterval(async () => {
     updateWebview();
-  }, 30000);
+    try {
+      const status = await getDaemonStatus();
+      const isOnline = !!(status && status.connected);
+      if (isOnline !== lastKnownDaemonState) {
+        lastKnownDaemonState = isOnline;
+        fsProvider.refresh();
+      }
+    } catch {}
+  }, 5000);
 
   context.subscriptions.push({
     dispose: () => clearInterval(interval)

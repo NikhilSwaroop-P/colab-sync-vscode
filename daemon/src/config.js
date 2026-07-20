@@ -75,6 +75,16 @@ export async function addLink(rootPath, name = "default") {
     await fs.writeFile(colabignorePath, defaultIgnore, "utf8");
   }
 
+  const gitignorePath = path.join(absPath, ".gitignore");
+  try {
+    const content = await fs.readFile(gitignorePath, "utf8");
+    if (!content.includes(".colab")) {
+      await fs.writeFile(gitignorePath, content + (content.endsWith("\n") ? "" : "\n") + ".colab\n", "utf8");
+    }
+  } catch {
+    await fs.writeFile(gitignorePath, ".colab\n", "utf8");
+  }
+
   const links = [{ path: absPath, name, linkedAt: localConfig.linkedAt }];
   await saveGlobalLinks(links);
 }

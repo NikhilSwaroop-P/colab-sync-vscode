@@ -590,13 +590,32 @@ export function createServer(config, rt, linksRegistry) {
 
       if (method === "POST" && pathname === "/v1/sync") {
         const direction = url.searchParams.get("direction") || "both";
-        const result = await ctx.syncEngine.sync(direction);
+        const isStream = url.searchParams.get("stream") === "1";
+        
+        let onProgress = null;
+        if (isStream) {
+          res.writeHead(200, {
+            "Content-Type": "application/x-ndjson",
+            "Transfer-Encoding": "chunked"
+          });
+          onProgress = (evt) => {
+            res.write(JSON.stringify({ progress: evt }) + "\n");
+          };
+        }
+
+        const result = await ctx.syncEngine.sync(direction, onProgress);
         await ctx.gitTracker.commit(`sync ${new Date().toISOString()}`);
         ctx.cachedSyncLevel = { outgoing: 0, incoming: 0, conflicts: 0 };
         ctx.lastSyncLevelCheck = Date.now();
         ctx.lastSyncStats = { bytes: result.bytesTransferred, ms: result.elapsedMs };
-        res.writeHead(200);
-        return res.end(JSON.stringify(result));
+        
+        if (isStream) {
+          res.write(JSON.stringify({ result }) + "\n");
+          return res.end();
+        } else {
+          res.writeHead(200);
+          return res.end(JSON.stringify(result));
+        }
       }
 
       if (method === "GET" && pathname === "/v1/sync") {

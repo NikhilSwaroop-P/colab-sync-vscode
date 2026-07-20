@@ -5,7 +5,7 @@ import { getGitConfig, saveGitConfig } from "./config.js";
 const ANSI_RE = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
 const EXEC_TIMEOUT_MS = 120_000;
 
-async function execOnColab(rt, command, onProgress) {
+export async function execOnColab(rt, command, onProgress) {
   const wsUrl = rt.baseUrl.replace("https:", "wss:") + "/colab/tty";
   const ws = new WebSocket(wsUrl, {
     headers: { "X-Colab-Runtime-Proxy-Token": rt.proxyToken }
